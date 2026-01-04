@@ -47,7 +47,13 @@ namespace MultiLauncher{
             }
             // GETTERS
             const std::string& getName() const { return name; };
-            const LauncherType getLauncher() const { return launcher; };
             const std::filesystem::path& getPath() const { return path; };
+            const std::string& getLauncher() const {
+                switch (launcher){
+                    case EPIC: return "Epic Games Store";
+                    case STEAM: return "Steam";
+                    case GOG: return "GOG Galaxy";
+                } 
+            }
     };
 }
