@@ -2,8 +2,8 @@
 #include "../include/SteamScanner.hpp"
 #include "../include/EpicScanner.hpp"
 #include <iostream>
+#include <algorithm>
 #include <iomanip>
-
 
 int main(){
     MultiLauncher::GameManager manager;
@@ -15,8 +15,12 @@ int main(){
     manager.scanAll();
 
     const auto& games = manager.getGames();
+    sort(games.begin(), games.end());
+
+    int licznik = 0;
     for(auto& game : games){
-        std::cout << std::setw(30) <<"Found game: " << game.getName() << " from Lancher: "
-                    << game.getLauncher() << " at path: " << game.getPath() << std::endl;
+        licznik++;
+        std::cout << licznik <<" game: " << std::setw(20) << game.getName() << " from lancher: "
+                    << std::setw(10) <<game.getLauncher() << " at path: " << std::setw(10) <<game.getPath() << std::endl;
     }
 }

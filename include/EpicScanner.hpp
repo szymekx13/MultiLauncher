@@ -18,7 +18,8 @@ namespace MultiLauncher{
                 std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
                 
                 if(!std::filesystem::exists(manifestDir)){
-                    throw std::runtime_error("Manifest directory not found");
+                    throw std::runtime_error("Epic games manifest directory not found");
+                    std::cerr << "Epic Games manifest directory not found at: " << manifestDir << std::endl;
                     return games;
                 }
                 for(const auto& entry : std::filesystem::directory_iterator(manifestDir)){

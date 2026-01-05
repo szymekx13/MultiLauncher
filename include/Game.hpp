@@ -20,12 +20,7 @@ namespace MultiLauncher{
             std::filesystem::path path; //path to .exe
 
         public: // FUNCITIONS DECLARATIONS
-            Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p) : name(n), launcher(launch), path(p) 
-            {
-                if(!std::filesystem::exists(p)){
-                    throw std::runtime_error("Executable not found");
-                }
-            }
+            Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p) : name(n), launcher(launch), path(p) {}
             ~Game() = default;
             void launch() const{
                 #ifdef _WIN32
@@ -48,12 +43,13 @@ namespace MultiLauncher{
             // GETTERS
             const std::string& getName() const { return name; };
             const std::filesystem::path& getPath() const { return path; };
-            const std::string& getLauncher() const {
+            const std::string getLauncher() const {
                 switch (launcher){
                     case EPIC: return "Epic Games Store";
                     case STEAM: return "Steam";
                     case GOG: return "GOG Galaxy";
                 } 
+                return "Unknown";
             }
     };
 }
