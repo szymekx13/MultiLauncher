@@ -1,5 +1,6 @@
 #pragma once
 #include "Gui.hpp"
+#include "GameManager.hpp"
 
 namespace MultiLauncher{
     class App{
@@ -8,4 +9,4 @@ namespace MultiLauncher{
         public:
             void run();
     };
-}
+} // namespace MultiLauncher

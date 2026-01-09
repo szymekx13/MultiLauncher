@@ -84,19 +84,29 @@ namespace MultiLauncher{
         WNDCLASSEXA wc{ sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L,0L,
                         (HINSTANCE)GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr,
                         "MultiLauncher", nullptr };
+        if (!RegisterClassExA(&wc)) {
+            MessageBoxA(NULL, "Failed to register window class (RegisterClassExA returned 0).", "MultiLauncher Error", MB_ICONERROR | MB_OK);
+            return;
+        }
+
         HWND hwnd = CreateWindowA(wc.lpszClassName, "MultiLauncher", WS_OVERLAPPEDWINDOW, 100,100,800,600,
                                 nullptr,nullptr,wc.hInstance,nullptr);
 
+        if (!hwnd) {
+            MessageBoxA(NULL, "Failed to create main window (CreateWindowA returned NULL).", "MultiLauncher Error", MB_ICONERROR | MB_OK);
+            return;
+        }
 
-        if (!CreateDeviceD3D(hwnd)) return;
+        if (!CreateDeviceD3D(hwnd)) {
+            MessageBoxA(NULL, "Failed to create D3D11 device and swap chain.", "MultiLauncher Error", MB_ICONERROR | MB_OK);
+            return;
+        }
 
         ShowWindow(hwnd, SW_SHOWDEFAULT);
         UpdateWindow(hwnd);
 
-        // Init ImGui
-        gui.init();
-        ImGui_ImplWin32_Init(hwnd);
-        ImGui_ImplDX11_Init(g_pd3dDevice, g_pd3dDeviceContext);
+        // Init GUI with the created HWND and D3D device/context/render target
+        gui.init(hwnd, g_pd3dDevice, g_pd3dDeviceContext, g_mainRenderTargetView);
 
         MultiLauncher::GameManager manager;
         manager.addScanner(std::make_unique<SteamScanner>());
@@ -123,7 +133,7 @@ namespace MultiLauncher{
             ImGui::Render();
             float clear_color[4] = { 0.1f, 0.1f, 0.1f, 1.0f };
             g_pd3dDeviceContext->ClearRenderTargetView(g_mainRenderTargetView, clear_color);
-            g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);
+            ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
             g_pSwapChain->Present(1,0);
         }
 

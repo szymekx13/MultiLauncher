@@ -113,6 +113,10 @@ public:
                 std::string name = name_it->second;
                 std::string appid = appid_it->second;
 
+                if(name == "Steamworks Common Redistributables"){
+                    continue;
+                }
+
                 // 6. Dodajemy do wektora gier
                 games.emplace_back(
                     name,
