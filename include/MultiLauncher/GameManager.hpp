@@ -3,7 +3,7 @@
 #include <vector>
 #include "Game.hpp"
 #include <memory>
-#include <iostream>
+#include "Logger.hpp"
 
 namespace MultiLauncher{
     class GameManager{
@@ -17,7 +17,7 @@ namespace MultiLauncher{
                         auto found = scanner->scan();
                         games.insert(games.end(), found.begin(), found.end());
                     }catch(const std::exception& e){
-                        std::cerr << "Scanner error: " << e.what() << std::endl;
+                        Logger::instance().error(std::string("Scanner error: ") + e.what());
                     }
                 }
             }

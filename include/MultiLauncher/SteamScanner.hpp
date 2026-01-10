@@ -3,6 +3,7 @@
 #include "../external/ValveFileVDF/vdf_parser.hpp"
 #include <fstream>
 #include <iostream>
+#include "Logger.hpp"
 #include <vector>
 #include <string>
 #include <filesystem>
@@ -18,7 +19,7 @@ public:
         // 1. Otwórz libraryfolders.vdf
         std::ifstream file(R"(C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf)");
         if (!file) {
-            std::cerr << "Could not open libraryfolders.vdf\n";
+            Logger::instance().error("Could not open libraryfolders.vdf");
             return games;
         }
 
@@ -26,11 +27,11 @@ public:
         try {
             root = tyti::vdf::read(file);
         } catch (const std::exception& e) {
-            std::cerr << "Failed to parse libraryfolders.vdf: " << e.what() << "\n";
+            Logger::instance().error(std::string("Failed to parse libraryfolders.vdf: ") + e.what());
             return games;
         }
 
-        std::cout << "Root name: " << root.name << std::endl;
+        Logger::instance().info(std::string("Root name: ") + root.name);
 
         // helper: attempt to get "path" from a library object (robust for different VDF shapes)
         auto get_library_path = [](const tyti::vdf::object& lib) -> std::optional<std::filesystem::path> {
@@ -55,7 +56,7 @@ public:
             // Ścieżka do biblioteki (robust)
             auto opt_path = get_library_path(lib);
             if (!opt_path.has_value()) {
-                std::cerr << "No path for library id: " << id << "\n";
+                Logger::instance().error(std::string("No path for library id: ") + id);
                 continue;
             }
 
@@ -64,7 +65,7 @@ public:
 
             if (!std::filesystem::exists(steamapps)) continue;
 
-            std::cout << "Steam library found: " << steamapps << std::endl;
+            Logger::instance().info(std::string("Steam library found: ") + steamapps.string());
 
             // 3. Iteruj po plikach appmanifest.acf
             for (const auto& entry : std::filesystem::directory_iterator(steamapps)) {
@@ -80,7 +81,7 @@ public:
                 try {
                     app = tyti::vdf::read(manifest);
                 } catch (...) {
-                    std::cerr << "Failed to parse " << filename << "\n";
+                    Logger::instance().error(std::string("Failed to parse ") + filename);
                     continue;
                 }
 
@@ -94,7 +95,7 @@ public:
                 }
 
                 if (!state) {
-                    std::cerr << "No AppState in appmanifest: " << filename << "\n";
+                    Logger::instance().error(std::string("No AppState in appmanifest: ") + filename);
                     continue;
                 }
 
@@ -106,7 +107,7 @@ public:
                 if (name_it == state->attribs.end() ||
                     installdir_it == state->attribs.end() ||
                     appid_it == state->attribs.end()) {
-                    std::cerr << "Missing attribute in appmanifest: " << filename << "\n";
+                    Logger::instance().error(std::string("Missing attribute in appmanifest: ") + filename);
                     continue;
                 }
 
@@ -126,7 +127,7 @@ public:
             }
         }
 
-        std::cout << "Total Steam games found: " << games.size() << std::endl;
+        Logger::instance().info(std::string("Total Steam games found: ") + std::to_string(games.size()));
         return games;
     }
 };
