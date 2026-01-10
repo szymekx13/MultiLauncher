@@ -5,6 +5,7 @@
 #include "../include/external/imgui/imgui.h"
 #include "../include/external/imgui/imgui_internal.h" // added: DockBuilder declarations
 #include <cfloat> // added for FLT_MIN
+#include <thread> // added: run launches off UI thread
 #ifdef _WIN32
     #include <windows.h>
     #include <d3d11.h>
@@ -19,6 +20,10 @@
 
 // We'll keep a pointer accessible in WndProc for simple handling
 static Gui* g_gui_instance = nullptr;
+
+// add global font pointers so render() can use them
+static ImFont* g_mainFont = nullptr;
+static ImFont* g_mainBold = nullptr;
 
 static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -59,28 +64,13 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     // Enable Keyboard Controls and Docking (Viewports temporarily disabled to avoid missing UpdatePlatformWindows)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
 
-    // Clear default fonts
-    io.Fonts->Clear();
-
-    // Load font
-    ImFont* mainFont = io.Fonts->AddFontFromFileTTF(
-        "assets/fonts/Inter_18pt-Regular.ttf",   // font path from .exe path
-        18.0f,                                   // font size (px)
-        nullptr,                                 // font config 
-        io.Fonts->GetGlyphRangesDefault()        // setting alphabetical characters eg. Chinese, Central European, Cyrullic etc.  
-    );
-    IM_ASSERT(mainFont && "Failed to load font");
-
-    ImFont* mainBold = io.Fonts->AddFontFromFileTTF(
-        "assets/fonts/Inter_18pt-Bold.ttf",
-        18.0f,
-        nullptr,
-        io.Fonts->GetGlyphRangesDefault()
-    );
-    IM_ASSERT(mainBold && "Failed to load font");
-
-    // Setting default font
-    io.FontDefault = mainFont;
+    // Try to load custom fonts but don't abort if missing.
+    ImFont* f1 = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter_18pt-Regular.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
+    if (f1) g_mainFont = f1;
+    ImFont* f2 = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter_18pt-Bold.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
+    if (f2) g_mainBold = f2;
+    // Only override default if we actually loaded a font
+    if (g_mainFont) io.FontDefault = g_mainFont;
 
     ImGui::StyleColorsDark();
 
@@ -176,54 +166,127 @@ void Gui::render(GameManager& manager) {
     // selected game visible for all panels in this frame
     static std::string selected_game_name;
 
-    // Panels: Games (table layout)
+    // Panels: Games
     ImGui::Begin("Games");
+
     static char game_filter[128] = "";
     ImGui::InputTextWithHint("##game_filter", "Filter games...", game_filter, sizeof(game_filter));
-    ImGui::Separator();
-    ImGui::BeginChild("GamesList", ImVec2(0,0), false, ImGuiWindowFlags_None);
 
-    auto& games = manager.getGames();
+    // launcher filter bitmask
+    static int launcher_filter = 0;
+    const int LF_STEAM = 1, LF_EPIC = 2, LF_GOG = 4;
+
+    ImGui::SameLine();
+    ImGui::Text("Launcher:");
+    ImGui::SameLine();
+
+    // Steam
+    bool active = (launcher_filter & LF_STEAM);
+    if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.10f,0.45f,0.85f,1.0f));
+    if (ImGui::SmallButton("S")) launcher_filter ^= LF_STEAM;
+    if (active) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Steam");
+
+    ImGui::SameLine();
+    // Epic
+    active = (launcher_filter & LF_EPIC);
+    if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.55f,0.10f,0.85f,1.0f));
+    if (ImGui::SmallButton("E")) launcher_filter ^= LF_EPIC;
+    if (active) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("Epic");
+
+    ImGui::SameLine();
+    // GOG
+    active = (launcher_filter & LF_GOG);
+    if (active) ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.05f,0.75f,0.35f,1.0f));
+    if (ImGui::SmallButton("G")) launcher_filter ^= LF_GOG;
+    if (active) ImGui::PopStyleColor();
+    if (ImGui::IsItemHovered()) ImGui::SetTooltip("GOG");
+
+    ImGui::Separator();
+
+    // ===== TABLE =====
     if (ImGui::BeginTable("GamesTable", 2,
-        ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingStretchProp))
+        ImGuiTableFlags_RowBg |
+        ImGuiTableFlags_BordersInnerV |
+        ImGuiTableFlags_Resizable |
+        ImGuiTableFlags_SizingStretchProp))
     {
         ImGui::TableSetupColumn("Game", ImGuiTableColumnFlags_WidthStretch, 1.0f);
-        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        ImGui::TableSetupColumn("Action", ImGuiTableColumnFlags_WidthFixed, 110.0f);
         ImGui::TableHeadersRow();
 
-        for (size_t i = 0; i < games.size(); ++i) {
+        auto& games = manager.getGames();
+        for (size_t i = 0; i < games.size(); ++i)
+        {
             auto& game = games[i];
-            if (game_filter[0] != '\0' &&
+
+            // text filter
+            if (game_filter[0] &&
                 game.getName().find(game_filter) == std::string::npos)
                 continue;
 
-            ImGui::TableNextRow();
-            // Column 0: Game (selectable occupies only label width)
+            // launcher filter
+            if (launcher_filter)
+            {
+                const std::string& L = game.getLauncher();
+                bool match = false;
+                if ((launcher_filter & LF_STEAM) && L.find("Steam") != std::string::npos) match = true;
+                if ((launcher_filter & LF_EPIC) && L.find("Epic") != std::string::npos) match = true;
+                if ((launcher_filter & LF_GOG) && (L.find("GOG") != std::string::npos || L.find("gog") != std::string::npos)) match = true;
+                if (!match) continue;
+            }
+
+            ImGui::TableNextRow(ImGuiTableRowFlags_None, 36.0f);
+
+            // ===== COLUMN 0: GAME =====
             ImGui::TableSetColumnIndex(0);
             bool selected = (selected_game_name == game.getName());
-            // Make selectable auto-size to its label (prevent overlapping Action column)
+
+            ImGui::PushItemFlag(ImGuiItemFlags_AllowOverlap, true);
             if (ImGui::Selectable(
-                    (game.getName() + "##sel" + std::to_string(i)).c_str(),
+                    ("##sel" + std::to_string(i)).c_str(),
                     selected,
-                    0,
-                    ImVec2(0, 0)))
+                    ImGuiSelectableFlags_SpanAllColumns,
+                    ImVec2(0, 36)))
             {
                 selected_game_name = game.getName();
             }
-            ImGui::TextDisabled("%s", game.getLauncher().c_str());
+            ImGui::PopItemFlag();
 
-            // Column 1: Launch button
-            ImGui::TableSetColumnIndex(1);
-            if (ImGui::Button(("Launch##" + std::to_string(i)).c_str(), ImVec2(-FLT_MIN, 0))) {
+            if(ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)){
                 game.launch();
-                selected_game_name = game.getName();
             }
+
+            ImGui::SameLine();
+            ImGui::BeginGroup();
+            ImGui::TextUnformatted(game.getName().c_str());
+            ImGui::TextDisabled("%s", game.getLauncher().c_str());
+            ImGui::EndGroup();
+
+            // ===== COLUMN 1: ACTION =====
+            ImGui::TableSetColumnIndex(1);
+            ImGui::PushID((int)i);
+
+            if (ImGui::Button("Launch", ImVec2(-FLT_MIN, 28)))
+            {
+                Logger::instance().info("Launching " + game.getName());
+                Game copy = game;
+                std::thread([copy]() mutable {
+                    try { copy.launch(); }
+                    catch (...) {}
+                }).detach();
+            }
+
+            ImGui::PopID();
         }
+
         ImGui::EndTable();
     }
 
-    ImGui::EndChild();
     ImGui::End();
+
+
 
     // Panels: Details (shows details for selected game)
     ImGui::Begin("Details");
@@ -236,7 +299,15 @@ void Gui::render(GameManager& manager) {
                 ImGui::Text("Launcher: %s", g.getLauncher().c_str());
                 ImGui::Separator();
                 if (ImGui::Button("Launch")) {
-                    g.launch();
+                    OutputDebugStringA(("MultiLauncher: launching from Details: " + g.getName() + "\n").c_str());
+                    Game gameCopy = g;
+                    std::thread([gameCopy]() mutable {
+                        try {
+                            gameCopy.launch();
+                        } catch (...) {
+                            OutputDebugStringA("MultiLauncher: exception in details launch thread\n");
+                        }
+                    }).detach();
                 }
                 found = true;
                 break;

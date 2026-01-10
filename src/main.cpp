@@ -3,7 +3,6 @@
 
 int main() {
     MultiLauncher::App app;
-    static_assert(ImGuiConfigFlags_DockingEnable != 0, "Docking NOT enabled");
     app.run();
     return 0;
 }
