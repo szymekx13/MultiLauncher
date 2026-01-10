@@ -59,6 +59,29 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     // Enable Keyboard Controls and Docking (Viewports temporarily disabled to avoid missing UpdatePlatformWindows)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
 
+    // Clear default fonts
+    io.Fonts->Clear();
+
+    // Load font
+    ImFont* mainFont = io.Fonts->AddFontFromFileTTF(
+        "assets/fonts/Inter_18pt-Regular.ttf",   // font path from .exe path
+        18.0f,                                   // font size (px)
+        nullptr,                                 // font config 
+        io.Fonts->GetGlyphRangesDefault()        // setting alphabetical characters eg. Chinese, Central European, Cyrullic etc.  
+    );
+    IM_ASSERT(mainFont && "Failed to load font");
+
+    ImFont* mainBold = io.Fonts->AddFontFromFileTTF(
+        "assets/fonts/Inter_18pt-Bold.ttf",
+        18.0f,
+        nullptr,
+        io.Fonts->GetGlyphRangesDefault()
+    );
+    IM_ASSERT(mainBold && "Failed to load font");
+
+    // Setting default font
+    io.FontDefault = mainFont;
+
     ImGui::StyleColorsDark();
 
     // Small style tweaks (big visual impact)
