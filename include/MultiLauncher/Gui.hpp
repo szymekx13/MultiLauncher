@@ -6,8 +6,10 @@
     #include <d3d11.h>
 #endif
 
-namespace MultiLauncher{
 #include <memory>
+#include <unordered_map>
+
+namespace MultiLauncher{
 
     class Gui{
         public:
@@ -21,13 +23,24 @@ namespace MultiLauncher{
             ID3D11Device* getDevice() const { return pd3dDevice_; }
             ID3D11DeviceContext* getDeviceContext() const { return pd3dDeviceContext_; }
 
+            // Helpers
+            bool LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height);
+
         private:
 #ifdef _WIN32
             HWND hwnd_ = NULL;
-            IDXGISwapChain* pSwapChain_ = nullptr; // kept for compatibility but not owned when passed in
+            IDXGISwapChain* pSwapChain_ = nullptr;
             ID3D11Device* pd3dDevice_ = nullptr;
             ID3D11DeviceContext* pd3dDeviceContext_ = nullptr;
             ID3D11RenderTargetView* mainRenderTargetView_ = nullptr;
+
+            // Texture resources
+            ID3D11ShaderResourceView* m_iconSteam = nullptr;
+            ID3D11ShaderResourceView* m_iconEpic = nullptr;
+            ID3D11ShaderResourceView* m_iconGog = nullptr;
+            
+            // Allow banner caching
+            std::unordered_map<std::string, ID3D11ShaderResourceView*> m_textureCache;
 #endif
     };
 }

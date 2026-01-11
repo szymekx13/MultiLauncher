@@ -9,6 +9,7 @@ g++ ^
  src\main.cpp ^
  src\App.cpp ^
  src\Gui.cpp ^
+ src\Game.cpp ^
  include\external\imgui\imgui.cpp ^
  include\external\imgui\imgui_draw.cpp ^
  include\external\imgui\imgui_tables.cpp ^
@@ -18,7 +19,7 @@ g++ ^
  -Iinclude ^
  -Iinclude\external ^
  -Iinclude\external\imgui ^
- -ld3d11 -ldxgi -ldwmapi -ld3dcompiler -lgdi32 -luser32 -lole32 ^
+ -ld3d11 -ldxgi -ldwmapi -ld3dcompiler -lgdi32 -luser32 -lole32 -lurlmon ^
  -static-libgcc -static-libstdc++ ^
  -std=c++23 -O2 -o MultiLauncher.exe
 

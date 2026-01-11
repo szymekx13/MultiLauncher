@@ -122,7 +122,8 @@ public:
                 games.emplace_back(
                     name,
                     Game::STEAM,
-                    std::filesystem::path("steam://run/" + appid)
+                    std::filesystem::path("steam://run/" + appid),
+                    std::stoi(appid)
                 );
             }
         }

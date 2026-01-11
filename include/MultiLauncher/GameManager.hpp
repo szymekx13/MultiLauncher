@@ -15,7 +15,9 @@ namespace MultiLauncher{
                 for(auto& scanner : scanners){
                     try{
                         auto found = scanner->scan();
-                        games.insert(games.end(), found.begin(), found.end());
+                        for(auto& g : found){
+                            games.emplace_back(std::make_unique<Game>(std::move(g)));
+                        }
                     }catch(const std::exception& e){
                         Logger::instance().error(std::string("Scanner error: ") + e.what());
                     }
@@ -23,15 +25,15 @@ namespace MultiLauncher{
             }
 
             // mutable access
-            std::vector<Game>& getGames() {
+            std::vector<std::unique_ptr<Game> >& getGames() {
                 return games;
             }
             // const access
-            const std::vector<Game>& getGames() const {
+            const std::vector<std::unique_ptr<Game> >& getGames() const {
                 return games;
             }
         private:
             std::vector<std::unique_ptr<IScanner> > scanners;
-            std::vector<Game> games;
+            std::vector<std::unique_ptr<Game> >games;
     };
 }

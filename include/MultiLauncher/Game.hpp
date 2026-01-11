@@ -1,12 +1,23 @@
 #pragma once
+#include "Logger.hpp"
 #include <string>
 #include <filesystem>
 #include <stdexcept>
+#include <utility>
+#include <atomic>
+#include <thread>
 #ifdef _WIN32
 #include <windows.h>
+#include <d3d11.h>
 #endif
 
 namespace MultiLauncher{
+    struct BannerTexture {
+        ID3D11ShaderResourceView* srv = nullptr;
+        int width = 0;
+        int height = 0;
+    };
+
     class Game{
         public:
             enum LauncherType{
@@ -19,33 +30,33 @@ namespace MultiLauncher{
                 STARTING,
                 RUNNING
             };
+            enum GameStatus{
+                Idle,
+                Launching,
+                Running
+            };
         private:
             std::string name; // name of the game
             LauncherType launcher;
             std::filesystem::path path; //path to .exe
             State gameState;
-        public: // FUNCITIONS DECLARATIONS
-            Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p) : name(n), launcher(launch), path(p), gameState(STOPPED) {}
-            ~Game() = default;
-            const void launch() {
-                gameState = STARTING;
-                #ifdef _WIN32
-                    HINSTANCE result = ShellExecuteA(
-                        NULL,                   // hwnd
-                        "open",                 // operation
-                        path.string().c_str(),  // file
-                        NULL,                   // Parameters
-                        NULL,                   // Directory
-                        SW_SHOWNORMAL           // ShowCmd
-                    );
+            
+            // New members
+            int steamAppId;
+            mutable bool bannerLoaded;
+            mutable BannerTexture banner;
 
-                    if(reinterpret_cast<intptr_t>(result) <= 32){
-                        throw std::runtime_error("Something went wrong");
-                    }
-                #else
-                    // Here do same thing but for Linux/Unix systems
-                #endif
-            }
+            // Internal helper
+            bool LoadTextureFromFile(ID3D11Device* device, const wchar_t* filename, BannerTexture& out_banner) const;
+
+        public:
+            std::atomic<GameStatus> status = GameStatus::Idle; 
+            
+            Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p, int appid = -1);
+            ~Game();
+
+            const void launch();
+            
             // GETTERS
             const std::string& getName() const { return name; };
             const std::filesystem::path& getPath() const { return path; };
@@ -78,5 +89,63 @@ namespace MultiLauncher{
                 return nameC;
             }
             void setState(State s) { gameState = s; }
+            void launchAsync(){
+                if(status != GameStatus::Idle){
+                    return;
+                }
+
+                status = GameStatus::Launching;
+                std::thread([this](){
+                    try{
+                        status = GameStatus::Launching;
+                        launch();
+                    }catch(...){
+                        Logger::instance().error("Failed to launch " + name);
+                    }
+                    status = GameStatus::Idle;
+                }).detach();
+            }
+
+            // Banner support
+            bool loadBanner(ID3D11Device* device) const;
+            const BannerTexture& getBanner() const { return banner; }
+            int getSteamAppId() const { return steamAppId; }
+
+            Game(Game&& other) noexcept 
+                : name(std::move(other.name)), 
+                  launcher(std::move(other.launcher)), 
+                  path(std::move(other.path)), 
+                  gameState(std::move(other.gameState)), 
+                  status(other.status.load()),
+                  steamAppId(other.steamAppId),
+                  bannerLoaded(other.bannerLoaded),
+                  banner(other.banner)
+            {
+                // steal srv ownership
+                other.banner.srv = nullptr;
+                other.bannerLoaded = false;
+            }
+
+            // Simple move assignment (simplified)
+            Game& operator=(Game&& other) noexcept{
+                if(this != &other){
+                    name = std::move(other.name);
+                    launcher = std::move(other.launcher);
+                    path = std::move(other.path);
+                    gameState = std::move(other.gameState);
+                    status.store(other.status.load());
+                    
+                    steamAppId = other.steamAppId;
+                    bannerLoaded = other.bannerLoaded;
+                    banner = other.banner;
+                    
+                    other.banner.srv = nullptr;
+                    other.bannerLoaded = false;
+                }
+                return *this;
+            }
+
+            Game(const Game&) = delete;
+            Game& operator=(const Game&) = delete;
     };
 } // namespace MultiLauncher
