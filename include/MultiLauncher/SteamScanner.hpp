@@ -114,15 +114,19 @@ public:
                 std::string name = name_it->second;
                 std::string appid = appid_it->second;
 
+                // Cleanup name: replace underscores with spaces
+                std::replace(name.begin(), name.end(), '_', ' ');
+
                 if(name == "Steamworks Common Redistributables"){
                     continue;
                 }
 
-                // 6. Dodajemy do wektora gier
+                // 6. Add to the list of games
                 games.emplace_back(
                     name,
                     Game::STEAM,
                     std::filesystem::path("steam://run/" + appid),
+                    "", // Use default guessing for Steam games (we don't know the exe from .acf easily)
                     std::stoi(appid)
                 );
             }

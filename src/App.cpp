@@ -6,6 +6,7 @@
 #include "../include/external/imgui/imgui_impl_dx11.h"
 #include "../include/MultiLauncher/EpicScanner.hpp"
 #include "../include/MultiLauncher/SteamScanner.hpp"
+#include "../include/MultiLauncher/PlaytimeManager.hpp"
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
@@ -108,6 +109,9 @@ namespace MultiLauncher{
         // Init GUI with the created HWND and D3D device/context/render target
         gui.init(hwnd, g_pd3dDevice, g_pd3dDeviceContext, g_mainRenderTargetView);
 
+        // Init Playtime
+        PlaytimeManager::instance().init();
+
         MultiLauncher::GameManager manager;
         manager.addScanner(std::make_unique<SteamScanner>());
         manager.addScanner(std::make_unique<MultiLauncher::EpicScanner>());
@@ -116,11 +120,20 @@ namespace MultiLauncher{
         // Main loop
         MSG msg;
         ZeroMemory(&msg, sizeof(msg));
+        auto lastUpdate = std::chrono::steady_clock::now();
+
         while (msg.message != WM_QUIT) {
             if (PeekMessage(&msg, nullptr, 0,0, PM_REMOVE)) {
                 TranslateMessage(&msg);
                 DispatchMessage(&msg);
                 continue;
+            }
+
+            // Update game states every 2 seconds
+            auto now = std::chrono::steady_clock::now();
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 2) {
+                manager.update();
+                lastUpdate = now;
             }
 
             g_pd3dDeviceContext->OMSetRenderTargets(1, &g_mainRenderTargetView, nullptr);

@@ -38,7 +38,8 @@ namespace MultiLauncher{
         private:
             std::string name; // name of the game
             LauncherType launcher;
-            std::filesystem::path path; //path to .exe
+            std::filesystem::path path; // path to .exe or URL
+            std::string executableName; // name of the actual process to watch
             State gameState;
             
             // New members
@@ -50,9 +51,11 @@ namespace MultiLauncher{
             bool LoadTextureFromFile(ID3D11Device* device, const wchar_t* filename, BannerTexture& out_banner) const;
 
         public:
+            void updateStatus();
+            bool isProcessRunning(const std::string& processName) const;
             std::atomic<GameStatus> status = GameStatus::Idle; 
             
-            Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p, int appid = -1);
+            Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p, const std::string& exeName = "", int appid = -1);
             ~Game();
 
             const void launch();
@@ -64,7 +67,7 @@ namespace MultiLauncher{
                 switch(gameState){
                     case STOPPED: return "Not running";
                     case STARTING: return "Starting";
-                    case RUNNING: return "Runing";
+                    case RUNNING: return "Running";
                 }
                 return "Unknown";
             }
@@ -76,35 +79,11 @@ namespace MultiLauncher{
                 } 
                 return "Unknown";
             }
-            const std::string getExeName() const {
-                std::string nameC = this->name;
-                for(auto it = nameC.begin(); it != nameC.end(); ){
-                    if(*it == ' '){
-                        it = nameC.erase(it);
-                    }else{
-                        ++it;
-                    }
-                }
-                nameC += ".exe";
-                return nameC;
+            const std::string& getExeName() const {
+                return executableName;
             }
             void setState(State s) { gameState = s; }
-            void launchAsync(){
-                if(status != GameStatus::Idle){
-                    return;
-                }
-
-                status = GameStatus::Launching;
-                std::thread([this](){
-                    try{
-                        status = GameStatus::Launching;
-                        launch();
-                    }catch(...){
-                        Logger::instance().error("Failed to launch " + name);
-                    }
-                    status = GameStatus::Idle;
-                }).detach();
-            }
+            void launchAsync();
 
             // Banner support
             bool loadBanner(ID3D11Device* device) const;
@@ -115,6 +94,7 @@ namespace MultiLauncher{
                 : name(std::move(other.name)), 
                   launcher(std::move(other.launcher)), 
                   path(std::move(other.path)), 
+                  executableName(std::move(other.executableName)),
                   gameState(std::move(other.gameState)), 
                   status(other.status.load()),
                   steamAppId(other.steamAppId),
@@ -132,6 +112,7 @@ namespace MultiLauncher{
                     name = std::move(other.name);
                     launcher = std::move(other.launcher);
                     path = std::move(other.path);
+                    executableName = std::move(other.executableName);
                     gameState = std::move(other.gameState);
                     status.store(other.status.load());
                     

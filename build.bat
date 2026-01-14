@@ -19,7 +19,7 @@ g++ ^
  -Iinclude ^
  -Iinclude\external ^
  -Iinclude\external\imgui ^
- -ld3d11 -ldxgi -ldwmapi -ld3dcompiler -lgdi32 -luser32 -lole32 -lurlmon ^
+ -ld3d11 -ldxgi -ldwmapi -ld3dcompiler -lgdi32 -luser32 -lole32 -lurlmon -lshell32 ^
  -static-libgcc -static-libstdc++ ^
  -std=c++23 -O2 -o MultiLauncher.exe
 

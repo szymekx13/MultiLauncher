@@ -11,6 +11,11 @@ namespace MultiLauncher{
             void addScanner(std::unique_ptr<IScanner> scanner){
                 scanners.push_back(std::move(scanner));
             }
+            void update(){
+                for(auto& game : games){
+                    game->updateStatus();
+                }
+            }
             void scanAll(){
                 for(auto& scanner : scanners){
                     try{

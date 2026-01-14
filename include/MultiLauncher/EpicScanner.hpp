@@ -7,19 +7,18 @@
 #include "../external/JSON/json.hpp"
 using json = nlohmann::json;
 
-
 namespace MultiLauncher{
     class EpicScanner : public IScanner{
         public:
             std::vector<Game> scan() override {
                 std::vector<Game> games;
-                // Now we need to scan .item (wich is JSON) files in Epic installation dir
-                // parse them, and get the games info
                 std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
                 
                 if(!std::filesystem::exists(manifestDir)){
                     Logger::instance().error(std::string("Epic Games manifest directory not found at: ") + manifestDir.string());
                     return games;
+                }else{
+                    Logger::instance().info(std::string("Epic games library found: ") + manifestDir.string());
                 }
                 for(const auto& entry : std::filesystem::directory_iterator(manifestDir)){
                     if(entry.path().extension() != ".item"){
@@ -44,16 +43,18 @@ namespace MultiLauncher{
                         continue; // skip if required fields are missing
                     }
                     std::string name = j["DisplayName"].get<std::string>();
-                    std::filesystem::path exePath =
-                        std::filesystem::path(j["InstallLocation"].get<std::string>()) /
-                        j["LaunchExecutable"].get<std::string>();
+                    std::string launchExe = j["LaunchExecutable"].get<std::string>();
+                    std::filesystem::path installLoc = j["InstallLocation"].get<std::string>();
+                    std::filesystem::path exePath = installLoc / launchExe;
 
                     games.emplace_back(
                         name,
                         Game::LauncherType::EPIC,
-                        exePath
+                        exePath,
+                        launchExe
                     );
                 }
+                Logger::instance().info("Total epic games found: " + std::to_string(games.size()));
                 return games;
             }
     };

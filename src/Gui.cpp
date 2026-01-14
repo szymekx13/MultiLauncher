@@ -3,11 +3,13 @@
 #include "../include/external/imgui/imgui_impl_dx11.h"
 #include "../include/external/imgui/imgui_impl_win32.h"
 #include "../include/external/imgui/imgui.h"
-#include "../include/external/imgui/imgui_internal.h" // added: DockBuilder declarations
+#include "../include/external/imgui/imgui_internal.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../include/external/stb_image.h"
-#include <cfloat> // added for FLT_MIN
-#include <thread> // added: run launches off UI thread
+#include "../include/MultiLauncher/PlaytimeManager.hpp"
+#include <cfloat>
+#include <thread>
+#include <algorithm> // added for sorting
 #ifdef _WIN32
     #include <windows.h>
     #include <d3d11.h>
@@ -299,44 +301,57 @@ void Gui::render(GameManager& manager) {
     ImGui::Begin("Games");
     ImGui::PopFont();
 
-    static char game_filter[128] = "";
-    ImGui::InputTextWithHint("##game_filter", "Filter games...", game_filter, sizeof(game_filter));
+    // 1. Sort Row
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    static int sort_mode = 0;
+    const char* sort_items[] = { "Sort by Name", "Sort by Launcher" };
+    if(ImGui::BeginCombo("##sort", sort_items[sort_mode])) {
+        for(int n=0; n<IM_ARRAYSIZE(sort_items); n++) {
+            bool is_selected = (sort_mode == n);
+            if(ImGui::Selectable(sort_items[n], is_selected))
+                sort_mode = n;
+            if(is_selected)
+                ImGui::SetItemDefaultFocus();
+        }
+        ImGui::EndCombo();
+    }
 
-    // launcher filter bitmask
+    // 2. Search Row
+    static char game_filter[128] = "";
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    // Add a search icon-ish look if possible, but for now just hint
+    ImGui::InputTextWithHint("##game_filter", "Search games...", game_filter, sizeof(game_filter));
+
+    // 3. Filter Icons Row (Small, right aligned or left?)
+    // Let's keep them visible.
     static int launcher_filter = 0;
     const int LF_STEAM = 1, LF_EPIC = 2, LF_GOG = 4;
-
-    ImGui::SameLine();
-    ImGui::SameLine();
-    ImGui::Text("");
-    ImGui::SameLine();
 
     // Helper lambda for icon buttons
     auto IconButton = [](ID3D11ShaderResourceView* icon, const char* label, bool active, const ImVec4& color, int& flags, int flag_bit) {
         if(active) ImGui::PushStyleColor(ImGuiCol_Button, color);
         if(icon) {
-            if(ImGui::ImageButton(label, (ImTextureID)icon, ImVec2(24,24))) {
+            if(ImGui::ImageButton(label, (ImTextureID)icon, ImVec2(20,20))) { // slightly smaller
                 flags ^= flag_bit;
             }
         } else {
-            // Fallback if icon failed to load
-            if(ImGui::Button(label)) flags ^= flag_bit;
+             // Fallback
+             if(ImGui::Button(label)) flags ^= flag_bit;
         }
         if(active) ImGui::PopStyleColor();
-        if(ImGui::IsItemHovered()) ImGui::SetTooltip("%s", label); // simplified tooltip usage
+        if(ImGui::IsItemHovered()) ImGui::SetTooltip("Filter: %s", label);
     };
 
-    // Steam
+    ImGui::TextDisabled("Filters:");
+    ImGui::SameLine();
     bool steam_active = (launcher_filter & LF_STEAM);
     IconButton(m_iconSteam, "Steam", steam_active, ImVec4(0.10f,0.45f,0.85f,1.0f), launcher_filter, LF_STEAM);
-
+    
     ImGui::SameLine();
-    // Epic
     bool epic_active = (launcher_filter & LF_EPIC);
     IconButton(m_iconEpic, "Epic", epic_active, ImVec4(0.55f,0.10f,0.85f,1.0f), launcher_filter, LF_EPIC);
 
     ImGui::SameLine();
-    // GOG
     bool gog_active = (launcher_filter & LF_GOG);
     IconButton(m_iconGog, "GOG", gog_active, ImVec4(0.05f,0.75f,0.35f,1.0f), launcher_filter, LF_GOG);
 
@@ -355,13 +370,12 @@ void Gui::render(GameManager& manager) {
         ImGui::TableHeadersRow();
         ImGui::PopFont();
 
+        // 1. Filter and Build Display List
+        std::vector<Game*> displayList;
         auto& games = manager.getGames();
-        for (size_t i = 0; i < games.size(); ++i)
-        {
-            auto& game = games[i];
-            ImGui::PushID(static_cast<int>(i));
-
-            // text filter
+        for(auto& uptr : games) {
+            Game* game = uptr.get();
+             // text filter
             if (game_filter[0] &&
                 game->getName().find(game_filter) == std::string::npos)
                 continue;
@@ -376,6 +390,29 @@ void Gui::render(GameManager& manager) {
                 if ((launcher_filter & LF_GOG) && (L.find("GOG") != std::string::npos || L.find("gog") != std::string::npos)) match = true;
                 if (!match) continue;
             }
+            displayList.push_back(game);
+        }
+
+        // 2. Sort Display List
+        if(sort_mode == 0) { // Name
+            std::sort(displayList.begin(), displayList.end(), [](Game* a, Game* b){
+                return a->getName() < b->getName();
+            });
+        } else if (sort_mode == 1) { // Launcher
+            std::sort(displayList.begin(), displayList.end(), [](Game* a, Game* b){
+                if(a->getLauncher() != b->getLauncher())
+                    return a->getLauncher() < b->getLauncher();
+                return a->getName() < b->getName(); // secondary sort by name
+            });
+        }
+
+        // 3. Render Display List
+        for (size_t i = 0; i < displayList.size(); ++i)
+        {
+            Game* game = displayList[i];
+            
+            // Use pointer as ID for stability
+            ImGui::PushID(game);
 
             auto status = game->status.load();
 
@@ -393,7 +430,7 @@ void Gui::render(GameManager& manager) {
 
             ImGui::PushItemFlag(ImGuiItemFlags_AllowOverlap, true);
             if (ImGui::Selectable(
-                    ("##sel" + std::to_string(i)).c_str(),
+                    ("##sel"), // Label hidden
                     selected,
                     ImGuiSelectableFlags_SpanAllColumns,
                     ImVec2(0, 36)))
@@ -414,7 +451,6 @@ void Gui::render(GameManager& manager) {
 
             // ===== COLUMN 1: ACTION =====
             ImGui::TableSetColumnIndex(1);
-            ImGui::PushID((int)i);
 
             if(disabled){
                 ImGui::BeginDisabled();
@@ -426,7 +462,6 @@ void Gui::render(GameManager& manager) {
             }
             if(disabled) ImGui::EndDisabled();
 
-            ImGui::PopID();
             ImGui::PopID();
         }
 
@@ -445,7 +480,8 @@ void Gui::render(GameManager& manager) {
         for (auto& g : manager.getGames()) {
             if (g->getName() == selected_game_name) {
                 // Banner logic: use Game's lazy loader
-                if (g->getLauncher().find("Steam") != std::string::npos && g->loadBanner(pd3dDevice_)) {
+                // Now supports Steam (Download) and others (Local Cache)
+                if (g->loadBanner(pd3dDevice_)) {
                     const auto& banner = g->getBanner();
                     if(banner.srv) {
                         float availW = ImGui::GetContentRegionAvail().x;
@@ -482,43 +518,50 @@ void Gui::render(GameManager& manager) {
                         }
                     }
                 } else {
-                     // Fallback to legacy banner logic or text if not steam/not loaded
-                    ID3D11ShaderResourceView* srv = nullptr;
-                    if(m_textureCache.find(g->getName()) != m_textureCache.end()){
-                        srv = m_textureCache[g->getName()];
-                    } else {
-                         std::string bannerPath = "assets/banners/" + g->getName() + ".png"; 
-                         int bw, bh;
-                         if(LoadTextureFromFile(bannerPath.c_str(), &srv, &bw, &bh)){
-                            m_textureCache[g->getName()] = srv;
-                         } else {
-                              std::string bannerPathJpg = "assets/banners/" + g->getName() + ".jpg";
-                              if(LoadTextureFromFile(bannerPathJpg.c_str(), &srv, &bw, &bh)){
-                                m_textureCache[g->getName()] = srv;
-                              } else {
-                                m_textureCache[g->getName()] = nullptr;
-                              }
-                         }
-                    }
+                     // Fallback Visuals
+                     ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.12f, 1.0f));
+                     if(ImGui::BeginChild("BannerFallback", ImVec2(0, 150), true)) {
+                        // Center text
+                         auto windowWidth = ImGui::GetWindowSize().x;
+                         auto textWidth   = ImGui::CalcTextSize("No Banner Available").x;
 
-                    if(srv) {
-                         float availW = ImGui::GetContentRegionAvail().x;
-                         float aspect = 460.0f / 215.0f; 
-                         ImGui::Image((ImTextureID)srv, ImVec2(availW, availW / aspect));
-                    }
+                         ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
+                         ImGui::SetCursorPosY(ImGui::GetWindowSize().y * 0.5f - 10.0f);
+                         ImGui::TextDisabled("No banner available");
+                     }
+                     ImGui::EndChild();
+                     ImGui::PopStyleColor();
                 }
 
                 ImGui::Separator();
                 ImGui::Text("Name: %s", g->getName().c_str());
                 ImGui::Text("Launcher: %s", g->getLauncher().c_str());
-                ImGui::Text("Steam App ID: %s", std::to_string(g->getSteamAppId()));
+                
+                // Unified Playtime Display
+                float hours = PlaytimeManager::instance().getHours(g->getName(), g->getSteamAppId());
+                if (hours > 0.0f) {
+                    ImGui::Text("Playtime: %.1f h", hours);
+                } else {
+                    ImGui::Text("Playtime: --");
+                }
 
 
                 ImGui::Separator();
-                if (ImGui::Button("Launch")) {
+                
+                // Dynamic Button Text
+                const char* btnLabel = "Launch";
+                auto status = g->status.load();
+                if(status == Game::GameStatus::Launching) btnLabel = "Launching...";
+                else if(status == Game::GameStatus::Running) btnLabel = "Running";
+                
+                bool disabled = (status != Game::GameStatus::Idle);
+                
+                if(disabled) ImGui::BeginDisabled();
+                if (ImGui::Button(btnLabel, ImVec2(120, 36))) {
                     OutputDebugStringA(("MultiLauncher: launching from Details: " + g->getName() + "\n").c_str());
                     g->launchAsync();
                 }
+                if(disabled) ImGui::EndDisabled();
                 found = true;
                 break;
             }
