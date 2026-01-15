@@ -13,12 +13,12 @@ g++ \
     include/external/imgui/imgui_draw.cpp \
     include/external/imgui/imgui_tables.cpp \
     include/external/imgui/imgui_widgets.cpp \
-    include/external/imgui/imgui_impl_win32.cpp \
-    include/external/imgui/imgui_impl_dx11.cpp \
+    include/external/imgui/imgui_impl_glfw.cpp \
+    include/external/imgui/imgui_impl_opengl3.cpp \
     -Iinclude \
     -Iinclude/external \
     -Iinclude/external/imgui \
-    -ld3d11 -ldxgi -ldwmapi -ld3dcompiler -lgdi32 -luser32 -lole32 -lurlmon -lshell32 \
+    -lglfw -lGL -ldl -lpthread \
     -static-libgcc -static-libstdc++ \
     -std=c++23 -O2 -o MultiLauncher
 

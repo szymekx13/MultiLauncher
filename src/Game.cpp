@@ -5,7 +5,6 @@
 #include <algorithm>
 #include <fstream>
 #include <string>
-#include <curl/curl.h>
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -15,6 +14,11 @@
 #include <shellapi.h>
 #include <urlmon.h>
 #pragma comment(lib, "urlmon.lib")
+#else
+#include <unistd.h>
+#include <sys/wait.h>
+#include <dirent.h>
+#include <cstring>
 #endif
 
 namespace MultiLauncher {
@@ -23,7 +27,7 @@ namespace MultiLauncher {
         : name(n), launcher(launch), path(p), executableName(exeName), gameState(STOPPED), steamAppId(appid), bannerLoaded(false), banner{nullptr, 0, 0}
     {
         if (executableName.empty()) {
-            // Default executable name guessing if not provided
+            // Guess exe name from game title if not provided
             executableName = name;
             executableName.erase(std::remove_if(executableName.begin(), executableName.end(), 
                 [](unsigned char c){ return std::isspace(c); }), executableName.end());
@@ -47,7 +51,7 @@ namespace MultiLauncher {
             try {
                 auto start = std::chrono::steady_clock::now();
                 
-                launch(); // Blocks until the game (or its process) is considered closed
+                launch();
                 
                 auto end = std::chrono::steady_clock::now();
                 auto elapsedMinutes = std::chrono::duration_cast<std::chrono::minutes>(end - start).count();
@@ -91,7 +95,7 @@ namespace MultiLauncher {
 
             if (ShellExecuteExA(&shExInfo))
             {
-                // We set Launching status; the background poller will pick up "Running" once the process is found
+                // Background poller will update to Running when process is detected
                 status = GameStatus::Launching;
                 
                 if (shExInfo.hProcess != NULL) {
@@ -107,7 +111,7 @@ namespace MultiLauncher {
             return;
         }
 
-        // Non-Steam games (Executable path) -> CreateProcess with Pipe Capture
+        // Non-Steam: launch exe directly with output capture
         SECURITY_ATTRIBUTES saAttr; 
         saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
         saAttr.bInheritHandle = TRUE; 
@@ -143,7 +147,7 @@ namespace MultiLauncher {
             
             CloseHandle(hChildStd_OUT_Wr);
             
-            // Still read output to log it, but don't block status on it infinitely
+            // Read and log game output
             CHAR chBuf[4096]; 
             DWORD dwRead;
             while (true) {
@@ -166,7 +170,24 @@ namespace MultiLauncher {
             CloseHandle(hChildStd_OUT_Rd);
         }
         #else
-            // Linux/Unix impl
+            // Linux: use fork/exec
+            Logger::instance().info("Launching game: " + name);
+            
+            pid_t pid = fork();
+            if (pid == 0) {
+                // Child process
+                std::string exePath = path.string();
+                execl(exePath.c_str(), exePath.c_str(), nullptr);
+                // execl only returns on error
+                exit(1);
+            } else if (pid > 0) {
+                // Parent process
+                status = GameStatus::Launching;
+                int statusCode;
+                waitpid(pid, &statusCode, 0);
+            } else {
+                Logger::instance().error("Failed to fork process for: " + name);
+            }
         #endif
     }
 
@@ -177,11 +198,16 @@ namespace MultiLauncher {
         char str[1024];
         WideCharToMultiByte(CP_UTF8, 0, filename, -1, str, 1024, NULL, NULL);
 
+        Logger::instance().info(std::string("Attempting to load banner from: ") + str);
+
         int image_width = 0;
         int image_height = 0;
         int channels = 0;
         unsigned char* image_data = stbi_load(str, &image_width, &image_height, &channels, 4);
-        if (image_data == NULL) return false;
+        if (image_data == NULL) {
+            Logger::instance().error(std::string("Failed to load image: ") + str + " - " + stbi_failure_reason());
+            return false;
+        }
 
         // Create texture
         D3D11_TEXTURE2D_DESC desc;
@@ -225,8 +251,7 @@ namespace MultiLauncher {
         return true;
     }
 
-    // Helper: generate sanitised key for banner lookup
-    // "Cyberpunk 2077" -> "cyberpunk2077"
+        // Sanitize game name for filesystem: "Cyberpunk 2077" -> "cyberpunk2077"
     static std::string makeBannerKey(const std::string& name) {
         std::string s = name;
         std::transform(s.begin(), s.end(), s.begin(), 
@@ -245,14 +270,42 @@ namespace MultiLauncher {
              if (!std::filesystem::exists("assets/cache")) {
                 std::filesystem::create_directories("assets/cache");
             }
-
-            std::wstring url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/library_hero.jpg";
+            
             std::wstring local = L"assets/cache/" + std::to_wstring(steamAppId) + L"_hero.jpg";
-
+            
+            // Try library_hero.jpg first
             if (!std::filesystem::exists(local)) {
-                HRESULT hr = URLDownloadToFileW(nullptr, url.c_str(), local.c_str(), 0, nullptr);
-                // If download fails, we fall through to local check? Or strict steam only?
-                // Let's assume if download fails, we might still have a manual override file.
+                std::wstring url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/library_hero.jpg";
+                HRESULT hr = URLDownloadToFileW(
+                    nullptr, 
+                    url.c_str(), 
+                    local.c_str(), 
+                    0, 
+                    nullptr
+                );
+                
+                // Fallback if library_hero.jpg unavailable
+                if (FAILED(hr) || !std::filesystem::exists(local)) {
+                    Logger::instance().info("library_hero.jpg not found for appid " + std::to_string(steamAppId) + ", trying hero.jpg");
+                    
+                    // Clean up failed download
+                    if (std::filesystem::exists(local)) {
+                        std::filesystem::remove(local);
+                    }
+                    
+                    url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/header.jpg";
+                    hr = URLDownloadToFileW(
+                        nullptr, 
+                        url.c_str(), 
+                        local.c_str(), 
+                        0, 
+                        nullptr
+                    );
+                    
+                    if (FAILED(hr)) {
+                        Logger::instance().error("Failed to download hero.jpg for appid " + std::to_string(steamAppId));
+                    }
+                }
             }
 
             if(LoadTextureFromFile(device, local.c_str(), banner)){
@@ -261,17 +314,13 @@ namespace MultiLauncher {
             }
         }
 
-        // Fallback or Non-Steam: Check Local "assets/banners/{key}.jpg/png"
+        // Try local banners folder as last resort
         std::string key = makeBannerKey(name);
-        
-        // Convert to wide string for generic load function if needed, 
-        // but LoadTextureFromFile takes wchar_t* and expects a path.
-        // Let's rely on relative paths being convertible or use filesystem.
         
         std::vector<std::string> exts = { ".jpg", ".png" };
         for(const auto& ext : exts) {
             std::string pathStr = "assets/banners/" + key + ext;
-            // Convert to wstring for our helper
+
             std::wstring wpath(pathStr.begin(), pathStr.end());
             
             if(std::filesystem::exists(pathStr)) {
@@ -291,7 +340,7 @@ namespace MultiLauncher {
             status = GameStatus::Running;
             gameState = RUNNING;
         } else {
-            // Only set to Idle if we aren't currently "Launching" (to avoid race conditions)
+            // Don't override Launching status to avoid race condition
             if (status != GameStatus::Launching) {
                 status = GameStatus::Idle;
                 gameState = STOPPED;
@@ -309,7 +358,7 @@ namespace MultiLauncher {
             PROCESSENTRY32 pe32;
             pe32.dwSize = sizeof(PROCESSENTRY32);
             if (Process32First(hSnapshot, &pe32)) {
-                // Convert search name to lower case
+                // Case-insensitive comparison
                 std::string searchName = processName;
                 std::transform(searchName.begin(), searchName.end(), searchName.begin(), ::tolower);
 
@@ -327,7 +376,52 @@ namespace MultiLauncher {
         }
         return found;
         #else
-        return false;
+        // Linux: scan /proc filesystem
+        DIR* dir = opendir("/proc");
+        if (dir == nullptr) return false;
+        
+        bool found = false;
+        struct dirent* entry;
+        
+        while ((entry = readdir(dir)) != nullptr) {
+            // Skip non-numeric directories
+            if (entry->d_type != DT_DIR) continue;
+            
+            bool isNumeric = true;
+            for (char* c = entry->d_name; *c; c++) {
+                if (!isdigit(*c)) {
+                    isNumeric = false;
+                    break;
+                }
+            }
+            if (!isNumeric) continue;
+            
+            // Read the cmdline file
+            std::string cmdlinePath = std::string("/proc/") + entry->d_name + "/cmdline";
+            std::ifstream cmdlineFile(cmdlinePath);
+            if (!cmdlineFile.is_open()) continue;
+            
+            std::string cmdline;
+            std::getline(cmdlineFile, cmdline, '\0');
+            cmdlineFile.close();
+            
+            // Extract executable name from path
+            size_t lastSlash = cmdline.find_last_of('/');
+            std::string exeName = (lastSlash != std::string::npos) ? cmdline.substr(lastSlash + 1) : cmdline;
+            
+            // Compare case-insensitively
+            std::string searchName = processName;
+            std::transform(searchName.begin(), searchName.end(), searchName.begin(), ::tolower);
+            std::transform(exeName.begin(), exeName.end(), exeName.begin(), ::tolower);
+            
+            if (searchName == exeName) {
+                found = true;
+                break;
+            }
+        }
+        
+        closedir(dir);
+        return found;
         #endif
     }
 

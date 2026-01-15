@@ -22,11 +22,11 @@ namespace MultiLauncher{
                 }
                 for(const auto& entry : std::filesystem::directory_iterator(manifestDir)){
                     if(entry.path().extension() != ".item"){
-                        continue; // skip non .item files
+                        continue;
                     }
                     std::ifstream file(entry.path());
                     if(!file){
-                        continue; // skip if file can't be opened
+                        continue;
                     }
                     
                     json j;
@@ -34,13 +34,13 @@ namespace MultiLauncher{
                     try{
                         file >> j;
                     }catch(...){
-                        continue; // skip if JSON parsing fails
+                        continue;
                     }
 
                     if(!j.contains("DisplayName") ||
                        !j.contains("InstallLocation") ||
                        !j.contains("LaunchExecutable")){
-                        continue; // skip if required fields are missing
+                        continue;
                     }
                     std::string name = j["DisplayName"].get<std::string>();
                     std::string launchExe = j["LaunchExecutable"].get<std::string>();

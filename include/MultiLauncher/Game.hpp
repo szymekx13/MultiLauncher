@@ -37,13 +37,11 @@ namespace MultiLauncher{
             };
         private:
             std::string name; // name of the game
-            LauncherType launcher;
-            std::filesystem::path path; // path to .exe or URL
+            LauncherType launcher; // name of launcher
+            std::filesystem::path path; // path to .exe or steam process
             std::string executableName; // name of the actual process to watch
             State gameState;
-            
-            // New members
-            int steamAppId;
+            int steamAppId; // steamID
             mutable bool bannerLoaded;
             mutable BannerTexture banner;
 
@@ -85,7 +83,6 @@ namespace MultiLauncher{
             void setState(State s) { gameState = s; }
             void launchAsync();
 
-            // Banner support
             bool loadBanner(ID3D11Device* device) const;
             const BannerTexture& getBanner() const { return banner; }
             int getSteamAppId() const { return steamAppId; }
@@ -101,12 +98,10 @@ namespace MultiLauncher{
                   bannerLoaded(other.bannerLoaded),
                   banner(other.banner)
             {
-                // steal srv ownership
                 other.banner.srv = nullptr;
                 other.bannerLoaded = false;
             }
 
-            // Simple move assignment (simplified)
             Game& operator=(Game&& other) noexcept{
                 if(this != &other){
                     name = std::move(other.name);

@@ -106,10 +106,10 @@ namespace MultiLauncher{
         ShowWindow(hwnd, SW_SHOWDEFAULT);
         UpdateWindow(hwnd);
 
-        // Init GUI with the created HWND and D3D device/context/render target
+        // Init GUI
         gui.init(hwnd, g_pd3dDevice, g_pd3dDeviceContext, g_mainRenderTargetView);
 
-        // Init Playtime
+        // Init playtime tracking
         PlaytimeManager::instance().init();
 
         MultiLauncher::GameManager manager;

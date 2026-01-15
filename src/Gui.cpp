@@ -216,8 +216,7 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     LoadTextureFromFile("assets/images/steam_logo.png", &m_iconSteam, &w, &h);
     LoadTextureFromFile("assets/images/epic_logo.png", &m_iconEpic, &w, &h);
     LoadTextureFromFile("assets/images/gog_logo.png", &m_iconGog, &w, &h);
-#else
-    // ...existing code for non-Windows if any...
+
 #endif
 }
 
@@ -227,7 +226,7 @@ void Gui::shutdown() {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    // Note: App owns the D3D device/swapchain and window; do not Release() them here
+    // App owns the device/swapchain
     mainRenderTargetView_ = nullptr;
     pSwapChain_ = nullptr;
     pSwapChain_ = nullptr;
@@ -245,9 +244,8 @@ void Gui::shutdown() {
     hwnd_ = NULL;
     UnregisterClass(_T("MultiLauncherWndClass"), GetModuleHandle(NULL));
     g_gui_instance = nullptr;
-#else
-    // ...existing code...
-#endif
+    
+    #endif
 }
 
 void Gui::render(GameManager& manager) {
@@ -301,7 +299,7 @@ void Gui::render(GameManager& manager) {
     ImGui::Begin("Games");
     ImGui::PopFont();
 
-    // 1. Sort Row
+
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     static int sort_mode = 0;
     const char* sort_items[] = { "Sort by Name", "Sort by Launcher" };
@@ -316,13 +314,13 @@ void Gui::render(GameManager& manager) {
         ImGui::EndCombo();
     }
 
-    // 2. Search Row
+
     static char game_filter[128] = "";
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     // Add a search icon-ish look if possible, but for now just hint
     ImGui::InputTextWithHint("##game_filter", "Search games...", game_filter, sizeof(game_filter));
 
-    // 3. Filter Icons Row (Small, right aligned or left?)
+    // Filter icons
     // Let's keep them visible.
     static int launcher_filter = 0;
     const int LF_STEAM = 1, LF_EPIC = 2, LF_GOG = 4;
@@ -357,7 +355,7 @@ void Gui::render(GameManager& manager) {
 
     ImGui::Separator();
 
-    // ===== TABLE =====
+
     if (ImGui::BeginTable("GamesTable", 2,
         ImGuiTableFlags_RowBg |
         ImGuiTableFlags_BordersInnerV |
@@ -370,7 +368,7 @@ void Gui::render(GameManager& manager) {
         ImGui::TableHeadersRow();
         ImGui::PopFont();
 
-        // 1. Filter and Build Display List
+        // Filter and build display list
         std::vector<Game*> displayList;
         auto& games = manager.getGames();
         for(auto& uptr : games) {
@@ -393,7 +391,7 @@ void Gui::render(GameManager& manager) {
             displayList.push_back(game);
         }
 
-        // 2. Sort Display List
+        // Sort display list
         if(sort_mode == 0) { // Name
             std::sort(displayList.begin(), displayList.end(), [](Game* a, Game* b){
                 return a->getName() < b->getName();
@@ -406,7 +404,7 @@ void Gui::render(GameManager& manager) {
             });
         }
 
-        // 3. Render Display List
+        // Render games
         for (size_t i = 0; i < displayList.size(); ++i)
         {
             Game* game = displayList[i];
@@ -424,7 +422,7 @@ void Gui::render(GameManager& manager) {
 
             ImGui::TableNextRow(ImGuiTableRowFlags_None, 36.0f);
 
-            // ===== COLUMN 0: GAME =====
+
             ImGui::TableSetColumnIndex(0);
             bool selected = (selected_game_name == game->getName());
 
@@ -449,7 +447,7 @@ void Gui::render(GameManager& manager) {
             ImGui::TextDisabled("%s", game->getLauncher().c_str());
             ImGui::EndGroup();
 
-            // ===== COLUMN 1: ACTION =====
+
             ImGui::TableSetColumnIndex(1);
 
             if(disabled){
@@ -491,7 +489,7 @@ void Gui::render(GameManager& manager) {
 
                         ImGui::Image((ImTextureID)banner.srv, ImVec2(availW, h));
 
-                        // Overlay + Title
+
                         ImVec2 p0 = ImGui::GetItemRectMin();
                         ImVec2 p1 = ImGui::GetItemRectMax();
                         ImDrawList* dl = ImGui::GetWindowDrawList();

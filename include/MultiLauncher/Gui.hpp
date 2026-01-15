@@ -13,17 +13,14 @@ namespace MultiLauncher{
 
     class Gui{
         public:
-            // Initialize GUI with an existing Win32 HWND and D3D11 device/context/RTV
             void init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceContext, ID3D11RenderTargetView* rtv);
             void render(GameManager& manager);
             void shutdown();
 
-            // getters needed by callers (kept for compatibility)
             HWND getHwnd() const { return hwnd_; }
             ID3D11Device* getDevice() const { return pd3dDevice_; }
             ID3D11DeviceContext* getDeviceContext() const { return pd3dDeviceContext_; }
 
-            // Helpers
             bool LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height);
 
         private:
@@ -39,7 +36,6 @@ namespace MultiLauncher{
             ID3D11ShaderResourceView* m_iconEpic = nullptr;
             ID3D11ShaderResourceView* m_iconGog = nullptr;
             
-            // Allow banner caching
             std::unordered_map<std::string, ID3D11ShaderResourceView*> m_textureCache;
 #endif
     };
