@@ -27,7 +27,6 @@ namespace MultiLauncher {
         : name(n), launcher(launch), path(p), executableName(exeName), gameState(STOPPED), steamAppId(appid), bannerLoaded(false), banner{nullptr, 0, 0}
     {
         if (executableName.empty()) {
-            // Guess exe name from game title if not provided
             executableName = name;
             executableName.erase(std::remove_if(executableName.begin(), executableName.end(), 
                 [](unsigned char c){ return std::isspace(c); }), executableName.end());
@@ -56,7 +55,6 @@ namespace MultiLauncher {
                 auto end = std::chrono::steady_clock::now();
                 auto elapsedMinutes = std::chrono::duration_cast<std::chrono::minutes>(end - start).count();
 
-                // Track playtime manually for non-Steam games
                 if (steamAppId <= 0) {
                      PlaytimeManager::instance().addPlaytime(name, (int)elapsedMinutes);
                 }
@@ -111,7 +109,6 @@ namespace MultiLauncher {
             return;
         }
 
-        // Non-Steam: launch exe directly with output capture
         SECURITY_ATTRIBUTES saAttr; 
         saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
         saAttr.bInheritHandle = TRUE; 
@@ -147,7 +144,6 @@ namespace MultiLauncher {
             
             CloseHandle(hChildStd_OUT_Wr);
             
-            // Read and log game output
             CHAR chBuf[4096]; 
             DWORD dwRead;
             while (true) {
@@ -170,15 +166,13 @@ namespace MultiLauncher {
             CloseHandle(hChildStd_OUT_Rd);
         }
         #else
-            // Linux: use fork/exec
+            // Linux
             Logger::instance().info("Launching game: " + name);
             
             pid_t pid = fork();
             if (pid == 0) {
                 // Child process
-                std::string exePath = path.string();
                 execl(exePath.c_str(), exePath.c_str(), nullptr);
-                // execl only returns on error
                 exit(1);
             } else if (pid > 0) {
                 // Parent process
@@ -194,7 +188,6 @@ namespace MultiLauncher {
     bool Game::LoadTextureFromFile(ID3D11Device* device, const wchar_t* filename, BannerTexture& out_banner) const {
         if (!device) return false;
 
-        // Convert wstring to string for stbi
         char str[1024];
         WideCharToMultiByte(CP_UTF8, 0, filename, -1, str, 1024, NULL, NULL);
 
@@ -251,7 +244,6 @@ namespace MultiLauncher {
         return true;
     }
 
-        // Sanitize game name for filesystem: "Cyberpunk 2077" -> "cyberpunk2077"
     static std::string makeBannerKey(const std::string& name) {
         std::string s = name;
         std::transform(s.begin(), s.end(), s.begin(), 
@@ -314,7 +306,7 @@ namespace MultiLauncher {
             }
         }
 
-        // Try local banners folder as last resort
+        // Local fallback
         std::string key = makeBannerKey(name);
         
         std::vector<std::string> exts = { ".jpg", ".png" };
@@ -338,9 +330,7 @@ namespace MultiLauncher {
         bool running = isProcessRunning(executableName);
         if (running) {
             status = GameStatus::Running;
-            gameState = RUNNING;
         } else {
-            // Don't override Launching status to avoid race condition
             if (status != GameStatus::Launching) {
                 status = GameStatus::Idle;
                 gameState = STOPPED;
@@ -376,7 +366,7 @@ namespace MultiLauncher {
         }
         return found;
         #else
-        // Linux: scan /proc filesystem
+        // Linux
         DIR* dir = opendir("/proc");
         if (dir == nullptr) return false;
         

@@ -10,7 +10,7 @@
 #include "../include/MultiLauncher/PlaytimeManager.hpp"
 #include <cfloat>
 #include <thread>
-#include <algorithm> // added for sorting
+#include <algorithm> 
 #ifdef _WIN32
     #include <windows.h>
     #include <d3d11.h>
@@ -18,15 +18,14 @@
     #pragma comment(lib, "d3d11.lib")
 #endif
 
-    // Forward-declare ImGui WndProc handler in global namespace (header leaves it in #if 0)
+    // WndProc helper
     extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
     namespace MultiLauncher{
 
-// We'll keep a pointer accessible in WndProc for simple handling
 static Gui* g_gui_instance = nullptr;
 
-// add global font pointers so render() can use them
+// global font pointers for render()
 static ImFont* g_mainFont = nullptr;
 static ImFont* g_mainBold = nullptr;
 
@@ -52,11 +51,8 @@ static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-// Function to load texture from file
-// Returns true on success
 bool Gui::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height)
 {
-    // Load from disk into a raw RGBA buffer
     int image_width = 0;
     int image_height = 0;
     int channels = 0;
@@ -64,7 +60,6 @@ bool Gui::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** o
     if (image_data == NULL)
         return false;
 
-    // Create texture
     D3D11_TEXTURE2D_DESC desc;
     ZeroMemory(&desc, sizeof(desc));
     desc.Width = image_width;
@@ -89,7 +84,6 @@ bool Gui::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** o
         return false;
     }
 
-    // Create texture view
     D3D11_SHADER_RESOURCE_VIEW_DESC srvDesc;
     ZeroMemory(&srvDesc, sizeof(srvDesc));
     srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -108,28 +102,24 @@ bool Gui::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** o
 
 void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceContext, ID3D11RenderTargetView* rtv) {
 #ifdef _WIN32
-    // Store provided D3D objects and HWND; App owns device/swapchain
     hwnd_ = hwnd;
     pd3dDevice_ = device;
     pd3dDeviceContext_ = deviceContext;
     mainRenderTargetView_ = rtv;
 
-    // ImGui context and backend init (do not create device/swapchain here)
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    // Enable Keyboard Controls and Docking (Viewports temporarily disabled to avoid missing UpdatePlatformWindows)
+    // Enable Keyboard Controls and Docking
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
 
-    // Try to load custom fonts but don't abort if missing.
     ImFont* f1 = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter_18pt-Regular.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
     if (f1) g_mainFont = f1;
     ImFont* f2 = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter_18pt-Bold.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
     if (f2) g_mainBold = f2;
-    // Only override default if we actually loaded a font
     if (g_mainFont) io.FontDefault = g_mainFont;
 
-    // Custom "Moonlight Grey" Theme
+    // "Moonlight Grey" Theme
     ImGuiStyle& style = ImGui::GetStyle();
     ImVec4* colors = style.Colors;
 
@@ -209,10 +199,8 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     ImGui_ImplDX11_Init(pd3dDevice_, pd3dDeviceContext_);
 
     // set global instance for WndProc usage
-    // set global instance for WndProc usage
     g_gui_instance = this;
 
-    // Load Icons
     int w, h;
     LoadTextureFromFile("assets/images/steam_logo.png", &m_iconSteam, &w, &h);
     LoadTextureFromFile("assets/images/epic_logo.png", &m_iconEpic, &w, &h);
@@ -227,7 +215,6 @@ void Gui::shutdown() {
     ImGui_ImplWin32_Shutdown();
     ImGui::DestroyContext();
 
-    // App owns the device/swapchain
     mainRenderTargetView_ = nullptr;
     pSwapChain_ = nullptr;
     pSwapChain_ = nullptr;
@@ -251,7 +238,6 @@ void Gui::shutdown() {
 
 void Gui::render(GameManager& manager) {
     auto lock = manager.lockGames();
-    // Root DockSpace / Host window
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->Pos);
     ImGui::SetNextWindowSize(viewport->Size);
@@ -261,7 +247,6 @@ void Gui::render(GameManager& manager) {
                                   ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove |
                                   ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
 
-    // Make background of host window transparent to allow docking passthru center
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::Begin("MultiLauncherRoot", nullptr, host_flags);
@@ -280,7 +265,7 @@ void Gui::render(GameManager& manager) {
         ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
         ImGuiID dock_main_id = dockspace_id;
 
-        // Split: left 25% for Games, bottom 25% for Logs, rest for Details
+        // Split: left 40% for Games, bottom 25% for Logs, rest for Details
         ImGuiID dock_left = 0, dock_bottom = 0;
         ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Left, 0.40f, &dock_left, &dock_main_id);
         ImGui::DockBuilderSplitNode(dock_main_id, ImGuiDir_Down, 0.25f, &dock_bottom, &dock_main_id);
@@ -293,15 +278,12 @@ void Gui::render(GameManager& manager) {
         dock_layout_initialized = true;
     }
 
-    // selected game visible for all panels in this frame
     static std::string selected_game_name;
 
-    // Panels: Games
     ImGui::PushFont(g_mainBold);
     ImGui::Begin("Games");
     ImGui::PopFont();
 
-    // Epic Login Button
     if (EpicProvider::isAvailable()) {
         if (ImGui::Button("Connect Epic Account", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
             EpicProvider::authenticate();
@@ -328,16 +310,11 @@ void Gui::render(GameManager& manager) {
 
 
     static char game_filter[128] = "";
-    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
-    // Add a search icon-ish look if possible, but for now just hint
     ImGui::InputTextWithHint("##game_filter", "Search games...", game_filter, sizeof(game_filter));
 
-    // Filter icons
-    // Let's keep them visible.
     static int launcher_filter = 0;
     const int LF_STEAM = 1, LF_EPIC = 2, LF_GOG = 4;
 
-    // Helper lambda for icon buttons
     auto IconButton = [](ID3D11ShaderResourceView* icon, const char* label, bool active, const ImVec4& color, int& flags, int flag_bit) {
         if(active) ImGui::PushStyleColor(ImGuiCol_Button, color);
         if(icon) {
@@ -380,7 +357,7 @@ void Gui::render(GameManager& manager) {
         ImGui::TableHeadersRow();
         ImGui::PopFont();
 
-        // Filter and build display list
+        // Filtering
         std::vector<Game*> displayList;
         auto& games = manager.getGames();
         for(auto& uptr : games) {
@@ -403,7 +380,7 @@ void Gui::render(GameManager& manager) {
             displayList.push_back(game);
         }
 
-        // Sort display list
+        // Sort
         if(sort_mode == 0) { // Name
             std::sort(displayList.begin(), displayList.end(), [](Game* a, Game* b){
                 return a->getName() < b->getName();
@@ -443,7 +420,7 @@ void Gui::render(GameManager& manager) {
                     ("##sel"), // Label hidden
                     selected,
                     ImGuiSelectableFlags_SpanAllColumns,
-                    ImVec2(0, 48))) // Slightly taller for progress bar
+                    ImVec2(0, 48))) 
             {
                 selected_game_name = game->getName();
             }
@@ -503,17 +480,14 @@ void Gui::render(GameManager& manager) {
 
     ImGui::End();
 
-    // Panels: Details (shows details for selected game)
+    // Details Panel
     ImGui::PushFont(g_mainBold);
     ImGui::Begin("Details");
     ImGui::PopFont();
     if (!selected_game_name.empty()) {
         bool found = false;
-        // iterate non-const so we can call launch()
         for (auto& g : manager.getGames()) {
             if (g->getName() == selected_game_name) {
-                // Banner logic: use Game's lazy loader
-                // Now supports Steam (Download) and others (Local Cache)
                 if (g->loadBanner(pd3dDevice_)) {
                     const auto& banner = g->getBanner();
                     if(banner.srv) {
@@ -539,7 +513,6 @@ void Gui::render(GameManager& manager) {
                             IM_COL32(0,0,0,200)
                         );
                         
-                        // Title on banner
                         if(g_mainBold) {
                             dl->AddText(
                                 g_mainBold,
@@ -551,7 +524,6 @@ void Gui::render(GameManager& manager) {
                         }
                     }
                 } else {
-                     // Fallback Visuals
                      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.12f, 1.0f));
                      if(ImGui::BeginChild("BannerFallback", ImVec2(0, 150), true)) {
                         // Center text
@@ -570,7 +542,6 @@ void Gui::render(GameManager& manager) {
                 ImGui::Text("Name: %s", g->getName().c_str());
                 ImGui::Text("Launcher: %s", g->getLauncher().c_str());
                 
-                // Unified Playtime Display
                 float hours = PlaytimeManager::instance().getHours(g->getName(), g->getSteamAppId());
                 if (hours > 0.0f) {
                     ImGui::Text("Playtime: %.1f h", hours);
@@ -579,9 +550,6 @@ void Gui::render(GameManager& manager) {
                 }
 
 
-                ImGui::Separator();
-                
-                // Dynamic Button Text
                 const char* btnLabel = "Launch";
                 auto status = g->status.load();
                 if(status == Game::GameStatus::Launching) btnLabel = "Launching...";
@@ -628,7 +596,7 @@ void Gui::render(GameManager& manager) {
     }
     ImGui::End();
 
-    // Panels: Logs (dockable)
+    // Logs Panel
     ImGui::Begin("Logs");
 
     if (ImGui::Button("Clear")) Logger::instance().clear();

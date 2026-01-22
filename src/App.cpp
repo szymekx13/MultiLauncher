@@ -11,8 +11,6 @@
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 
-
-// global DX11
 ID3D11Device* g_pd3dDevice = nullptr;
 ID3D11DeviceContext* g_pd3dDeviceContext = nullptr;
 IDXGISwapChain* g_pSwapChain = nullptr;
@@ -81,7 +79,6 @@ namespace MultiLauncher{
     }
 
     void App::run() {
-        // Register window class
         WNDCLASSEXA wc{ sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L,0L,
                         (HINSTANCE)GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr,
                         "MultiLauncher", nullptr };
@@ -133,7 +130,6 @@ namespace MultiLauncher{
                 continue;
             }
 
-            // Update game states every 2 seconds
             auto now = std::chrono::steady_clock::now();
             if (std::chrono::duration_cast<std::chrono::seconds>(now - lastUpdate).count() >= 2) {
                 manager.update();

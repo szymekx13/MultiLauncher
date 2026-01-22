@@ -1,3 +1,4 @@
+#pragma once
 #include "IScanner.hpp"
 #include "EpicProvider.hpp"
 #include <vector>
@@ -45,7 +46,6 @@ namespace MultiLauncher{
                     }
                     std::string name = j["DisplayName"].get<std::string>();
                     
-                    // Filtering: skip internal technical names or version strings
                     if (name.find("Version:") != std::string::npos || 
                         name.find("++") != std::string::npos ||
                         name.find("Update") != std::string::npos ||
@@ -66,11 +66,9 @@ namespace MultiLauncher{
                 }
                 Logger::instance().info("Total epic games found via manifests: " + std::to_string(games.size()));
 
-                // Supplement with Legendary if available
                 if (EpicProvider::isAvailable()) {
                     auto legendaryGames = EpicProvider::listGames();
                     for (const auto& lg : legendaryGames) {
-                        // Check if already found via manifest
                         bool found = false;
                         for (const auto& existing : games) {
                             if (existing.getName() == lg.title) {
@@ -82,7 +80,7 @@ namespace MultiLauncher{
                             games.emplace_back(
                                 lg.title,
                                 Game::LauncherType::EPIC,
-                                "", // Path is empty for non-installed legendary games
+                                "",
                                 lg.appName
                             );
                         }

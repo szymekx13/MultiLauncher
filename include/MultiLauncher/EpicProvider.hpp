@@ -75,12 +75,11 @@ namespace MultiLauncher {
                 if (code == 0) game.status = Game::GameStatus::Idle;
                 else game.status = Game::GameStatus::Error;
             }, [&](const std::string& line) {
-                // Regex for progress: [DL]  42% | 8.2GB / 19.3GB | 12MB/s
-                std::regex progressRegex(R"(\[DL\]\s+(\d+)%\s+\|\s+([\d\.]+GB\s+/\s+[\d\.]+GB)\s+\|\s+([\d\.]+\w+/s))");
+                std::regex progressRegex(R"(\[DL\]\s+(\d+)%\s+\|\s+([\d\.]+GB\s+/\s+[\d\.]+GB)\s+\|\s+([\d\. ]+\w+/s))");
                 std::smatch match;
                 if (std::regex_search(line, match, progressRegex)) {
                     game.setProgress(std::stof(match[1].str()) / 100.0f);
-                    game.setETA(match[3].str()); // Using speed as ETA info for now or we can parse ETA if legendary provides it
+                    game.setETA(match[3].str());
                 }
                 Logger::instance().info("[Legendary] " + line);
             });

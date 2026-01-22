@@ -39,12 +39,12 @@ namespace MultiLauncher{
                 Error
             };
         private:
-            std::string name; // name of the game
-            LauncherType launcher; // name of launcher
-            std::filesystem::path path; // path to .exe or steam process
-            std::string executableName; // name of the actual process to watch
+            std::string name;
+            LauncherType launcher;
+            std::filesystem::path path;
+            std::string executableName;
             State gameState;
-            int steamAppId; // steamID
+            int steamAppId;
             mutable bool bannerLoaded;
             mutable BannerTexture banner;
             float progress = 0.0f;

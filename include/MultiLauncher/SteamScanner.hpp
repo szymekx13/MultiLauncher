@@ -16,7 +16,6 @@ public:
     std::vector<Game> scan() override {
         std::vector<Game> games;
 
-        // 1. Otwórz libraryfolders.vdf
         std::ifstream file(R"(C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf)");
         if (!file) {
             Logger::instance().error("Could not open libraryfolders.vdf");
@@ -49,11 +48,9 @@ public:
             return std::nullopt;
         };
 
-        // 2. Iteruj po wszystkich bibliotekach Steam (root.childs contains "0", "1", ...)
         for (const auto& [id, lib_ptr] : root.childs) {
             const auto& lib = *lib_ptr;
 
-            // Ścieżka do biblioteki (robust)
             auto opt_path = get_library_path(lib);
             if (!opt_path.has_value()) {
                 Logger::instance().error(std::string("No path for library id: ") + id);
@@ -67,7 +64,6 @@ public:
 
             Logger::instance().info(std::string("Steam library found: ") + steamapps.string());
 
-            // 3. Iteruj po plikach appmanifest.acf
             for (const auto& entry : std::filesystem::directory_iterator(steamapps)) {
                 if (!entry.is_regular_file()) continue;
                 std::string filename = entry.path().filename().string();
@@ -85,7 +81,6 @@ public:
                     continue;
                 }
 
-                // 4. AppState może być root'em (app.name == "AppState") albo child'em
                 const tyti::vdf::object* state = nullptr;
                 if (app.name == "AppState") {
                     state = &app;
@@ -114,14 +109,13 @@ public:
                 std::string name = name_it->second;
                 std::string appid = appid_it->second;
 
-                // Cleanup name: replace underscores with spaces
+                // replace underscores with spaces
                 std::replace(name.begin(), name.end(), '_', ' ');
 
                 if(name == "Steamworks Common Redistributables"){
                     continue;
                 }
 
-                // 6. Add to the list of games
                 games.emplace_back(
                     name,
                     Game::STEAM,
