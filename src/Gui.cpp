@@ -1,5 +1,6 @@
 #include "../include/MultiLauncher/Gui.hpp"
 #include "../include/MultiLauncher/Logger.hpp"
+#include "../include/MultiLauncher/EpicProvider.hpp"
 #include "../include/external/imgui/imgui_impl_dx11.h"
 #include "../include/external/imgui/imgui_impl_win32.h"
 #include "../include/external/imgui/imgui.h"
@@ -249,6 +250,7 @@ void Gui::shutdown() {
 }
 
 void Gui::render(GameManager& manager) {
+    auto lock = manager.lockGames();
     // Root DockSpace / Host window
     ImGuiViewport* viewport = ImGui::GetMainViewport();
     ImGui::SetNextWindowPos(viewport->Pos);
@@ -298,6 +300,16 @@ void Gui::render(GameManager& manager) {
     ImGui::PushFont(g_mainBold);
     ImGui::Begin("Games");
     ImGui::PopFont();
+
+    // Epic Login Button
+    if (EpicProvider::isAvailable()) {
+        if (ImGui::Button("Connect Epic Account", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
+            EpicProvider::authenticate();
+        }
+    } else {
+        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Epic support requires legendary");
+    }
+    ImGui::Spacing();
 
 
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
@@ -431,7 +443,7 @@ void Gui::render(GameManager& manager) {
                     ("##sel"), // Label hidden
                     selected,
                     ImGuiSelectableFlags_SpanAllColumns,
-                    ImVec2(0, 36)))
+                    ImVec2(0, 48))) // Slightly taller for progress bar
             {
                 selected_game_name = game->getName();
             }
@@ -445,20 +457,43 @@ void Gui::render(GameManager& manager) {
             ImGui::BeginGroup();
             ImGui::TextUnformatted(game->getName().c_str());
             ImGui::TextDisabled("%s", game->getLauncher().c_str());
+            
+            if (status == Game::GameStatus::Downloading || status == Game::GameStatus::Installing) {
+                ImGui::PushStyleColor(ImGuiCol_PlotHistogram, ImVec4(0.3f, 0.65f, 1.0f, 1.0f));
+                ImGui::ProgressBar(game->getProgress(), ImVec2(ImGui::GetContentRegionAvail().x * 0.8f, 4), "");
+                ImGui::PopStyleColor();
+                ImGui::SameLine();
+                ImGui::TextDisabled("%.0f%%", game->getProgress() * 100.0f);
+            }
             ImGui::EndGroup();
 
 
             ImGui::TableSetColumnIndex(1);
 
-            if(disabled){
-                ImGui::BeginDisabled();
+            if (status == Game::GameStatus::Downloading || status == Game::GameStatus::Installing) {
+                if (ImGui::Button("Cancel", ImVec2(-FLT_MIN, 28))) {
+                    ProcessRunner::runAsync("tools/legendary/legendary.exe cancel", [](int){});
+                    game->status = Game::GameStatus::Idle;
+                }
+            } else if (status == Game::GameStatus::Error) {
+                if (ImGui::Button("Resume", ImVec2(-FLT_MIN, 28))) {
+                    EpicProvider::installGame(*game);
+                }
+            } else {
+                if(disabled){
+                    ImGui::BeginDisabled();
+                }
+                if (ImGui::Button(label, ImVec2(-FLT_MIN, 28)))
+                {
+                    Logger::instance().info("Launching " + game->getName());
+                    if (game->getLauncher().find("Epic") != std::string::npos) {
+                        EpicProvider::launchGame(game->getName());
+                    } else {
+                        game->launchAsync();
+                    }
+                }
+                if(disabled) ImGui::EndDisabled();
             }
-            if (ImGui::Button(label, ImVec2(-FLT_MIN, 28)))
-            {
-                Logger::instance().info("Launching " + game->getName());
-                game->launchAsync();
-            }
-            if(disabled) ImGui::EndDisabled();
 
             ImGui::PopID();
         }
@@ -554,12 +589,33 @@ void Gui::render(GameManager& manager) {
                 
                 bool disabled = (status != Game::GameStatus::Idle);
                 
-                if(disabled) ImGui::BeginDisabled();
-                if (ImGui::Button(btnLabel, ImVec2(120, 36))) {
-                    OutputDebugStringA(("MultiLauncher: launching from Details: " + g->getName() + "\n").c_str());
-                    g->launchAsync();
+                if (status == Game::GameStatus::Downloading || status == Game::GameStatus::Installing) {
+                    ImGui::Text("Status: %s", status == Game::GameStatus::Downloading ? "Downloading" : "Installing");
+                    ImGui::ProgressBar(g->getProgress(), ImVec2(-FLT_MIN, 20));
+                    ImGui::Text("Speed: %s", g->getETA().c_str());
+                    if (ImGui::Button("Cancel Installation", ImVec2(140, 36))) {
+                        ProcessRunner::runAsync("tools/legendary/legendary.exe cancel", [](int){});
+                        g->status = Game::GameStatus::Idle;
+                    }
+                } else {
+                    if(disabled) ImGui::BeginDisabled();
+                    if (ImGui::Button(btnLabel, ImVec2(120, 36))) {
+                        OutputDebugStringA(("MultiLauncher: launching from Details: " + g->getName() + "\n").c_str());
+                        if (g->getLauncher().find("Epic") != std::string::npos) {
+                            EpicProvider::launchGame(g->getName());
+                        } else {
+                            g->launchAsync();
+                        }
+                    }
+                    if(disabled) ImGui::EndDisabled();
+
+                    if (g->getLauncher().find("Epic") != std::string::npos && status == Game::GameStatus::Idle) {
+                        ImGui::SameLine();
+                        if (ImGui::Button("Install/Repair", ImVec2(120, 36))) {
+                            EpicProvider::installGame(*g);
+                        }
+                    }
                 }
-                if(disabled) ImGui::EndDisabled();
                 found = true;
                 break;
             }

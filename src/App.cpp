@@ -115,7 +115,11 @@ namespace MultiLauncher{
         MultiLauncher::GameManager manager;
         manager.addScanner(std::make_unique<SteamScanner>());
         manager.addScanner(std::make_unique<MultiLauncher::EpicScanner>());
-        manager.scanAll();
+        
+        // Scan in background to avoid UI lag
+        std::thread([&manager](){
+            manager.scanAll();
+        }).detach();
 
         // Main loop
         MSG msg;

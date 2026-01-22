@@ -1,4 +1,5 @@
 #include "IScanner.hpp"
+#include "EpicProvider.hpp"
 #include <vector>
 #include <filesystem>
 #include <fstream>
@@ -43,6 +44,15 @@ namespace MultiLauncher{
                         continue;
                     }
                     std::string name = j["DisplayName"].get<std::string>();
+                    
+                    // Filtering: skip internal technical names or version strings
+                    if (name.find("Version:") != std::string::npos || 
+                        name.find("++") != std::string::npos ||
+                        name.find("Update") != std::string::npos ||
+                        name.find("v.") != std::string::npos) {
+                        continue;
+                    }
+
                     std::string launchExe = j["LaunchExecutable"].get<std::string>();
                     std::filesystem::path installLoc = j["InstallLocation"].get<std::string>();
                     std::filesystem::path exePath = installLoc / launchExe;
@@ -54,7 +64,32 @@ namespace MultiLauncher{
                         launchExe
                     );
                 }
-                Logger::instance().info("Total epic games found: " + std::to_string(games.size()));
+                Logger::instance().info("Total epic games found via manifests: " + std::to_string(games.size()));
+
+                // Supplement with Legendary if available
+                if (EpicProvider::isAvailable()) {
+                    auto legendaryGames = EpicProvider::listGames();
+                    for (const auto& lg : legendaryGames) {
+                        // Check if already found via manifest
+                        bool found = false;
+                        for (const auto& existing : games) {
+                            if (existing.getName() == lg.title) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (!found) {
+                            games.emplace_back(
+                                lg.title,
+                                Game::LauncherType::EPIC,
+                                "", // Path is empty for non-installed legendary games
+                                lg.appName
+                            );
+                        }
+                    }
+                    Logger::instance().info("Total epic games after Legendary sync: " + std::to_string(games.size()));
+                }
+
                 return games;
             }
     };

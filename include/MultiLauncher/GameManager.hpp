@@ -4,6 +4,7 @@
 #include "Game.hpp"
 #include <memory>
 #include "Logger.hpp"
+#include <mutex>
 
 namespace MultiLauncher{
     class GameManager{
@@ -12,6 +13,7 @@ namespace MultiLauncher{
                 scanners.push_back(std::move(scanner));
             }
             void update(){
+                std::lock_guard<std::mutex> lock(gamesMutex);
                 for(auto& game : games){
                     game->updateStatus();
                 }
@@ -20,6 +22,7 @@ namespace MultiLauncher{
                 for(auto& scanner : scanners){
                     try{
                         auto found = scanner->scan();
+                        std::lock_guard<std::mutex> lock(gamesMutex);
                         for(auto& g : found){
                             games.emplace_back(std::make_unique<Game>(std::move(g)));
                         }
@@ -33,12 +36,17 @@ namespace MultiLauncher{
             std::vector<std::unique_ptr<Game> >& getGames() {
                 return games;
             }
-            // const access
+            // const access - Note: GUI should ideally use a copy or lock if games can be added mid-frame
             const std::vector<std::unique_ptr<Game> >& getGames() const {
                 return games;
+            }
+            
+            std::unique_lock<std::mutex> lockGames() const {
+                return std::unique_lock<std::mutex>(gamesMutex);
             }
         private:
             std::vector<std::unique_ptr<IScanner> > scanners;
             std::vector<std::unique_ptr<Game> >games;
+            mutable std::mutex gamesMutex;
     };
 }

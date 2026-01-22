@@ -33,7 +33,10 @@ namespace MultiLauncher{
             enum GameStatus{
                 Idle,
                 Launching,
-                Running
+                Running,
+                Downloading,
+                Installing,
+                Error
             };
         private:
             std::string name; // name of the game
@@ -44,6 +47,8 @@ namespace MultiLauncher{
             int steamAppId; // steamID
             mutable bool bannerLoaded;
             mutable BannerTexture banner;
+            float progress = 0.0f;
+            std::string eta = "";
 
             // Internal helper
             bool LoadTextureFromFile(ID3D11Device* device, const wchar_t* filename, BannerTexture& out_banner) const;
@@ -61,6 +66,8 @@ namespace MultiLauncher{
             // GETTERS
             const std::string& getName() const { return name; };
             const std::filesystem::path& getPath() const { return path; };
+            const float getProgress() const { return progress; };
+            const std::string getETA() const { return eta; };
             const std::string getState() const{
                 switch(gameState){
                     case STOPPED: return "Not running";
@@ -81,6 +88,8 @@ namespace MultiLauncher{
                 return executableName;
             }
             void setState(State s) { gameState = s; }
+            void setProgress(float p) { progress = p; }
+            void setETA(const std::string& e) { eta = e; }
             void launchAsync();
 
             bool loadBanner(ID3D11Device* device) const;
