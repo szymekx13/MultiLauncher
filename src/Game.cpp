@@ -1,5 +1,8 @@
 #include "../include/MultiLauncher/Game.hpp"
 #include "../include/external/stb_image.h"
+#ifdef __linux__
+#include <GL/gl.h>
+#endif
 #include <fstream>
 #include <string>
 #include <algorithm>
@@ -13,10 +16,13 @@
 #ifdef _WIN32
 #include <shellapi.h>
 #include <urlmon.h>
+#include <tlhelp32.h>
 #pragma comment(lib, "urlmon.lib")
 #else
 #include <unistd.h>
 #include <sys/wait.h>
+#include <curl/curl.h>
+#include <cstdio>
 #include <dirent.h>
 #include <cstring>
 #endif
@@ -36,9 +42,28 @@ namespace MultiLauncher {
 
     Game::~Game() {
         if(banner.srv) {
+#ifdef _WIN32
             banner.srv->Release();
+#else
+            GLuint id = (GLuint)(intptr_t)banner.srv;
+            glDeleteTextures(1, &id);
+#endif
             banner.srv = nullptr;
         }
+    }
+    bool url_exists(const std::string& url) {
+        CURL* curl = curl_easy_init();
+        if (!curl) return false;
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); // HEAD
+        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+
+        CURLcode res = curl_easy_perform(curl);
+        curl_easy_cleanup(curl);
+
+        return res == CURLE_OK;
     }
 
     void Game::launchAsync() {
@@ -75,8 +100,9 @@ namespace MultiLauncher {
 
     const void Game::launch() {
         gameState = STARTING;
+        std::string exePath = path.string();
         
-        #ifdef _WIN32
+#ifdef _WIN32
         if (launcher == STEAM) {
             SHELLEXECUTEINFOA shExInfo = {0};
             shExInfo.cbSize = sizeof(shExInfo);
@@ -134,7 +160,7 @@ namespace MultiLauncher {
         si.hStdError = hChildStd_OUT_Wr;
         
         PROCESS_INFORMATION pi = {0};
-        std::string exePath = path.string();
+        // std::string exePath = path.string(); // Already defined
         std::string workDir = path.parent_path().string();
         std::string cmdLine = "\"" + exePath + "\"";
 
@@ -165,14 +191,18 @@ namespace MultiLauncher {
             CloseHandle(hChildStd_OUT_Wr);
             CloseHandle(hChildStd_OUT_Rd);
         }
-        #else
+#else
             // Linux
             Logger::instance().info("Launching game: " + name);
             
             pid_t pid = fork();
             if (pid == 0) {
                 // Child process
-                execl(exePath.c_str(), exePath.c_str(), nullptr);
+                if (launcher == STEAM) {
+                    execlp("xdg-open", "xdg-open", exePath.c_str(), nullptr);
+                } else {
+                    execl(exePath.c_str(), exePath.c_str(), nullptr);
+                }
                 exit(1);
             } else if (pid > 0) {
                 // Parent process
@@ -182,10 +212,12 @@ namespace MultiLauncher {
             } else {
                 Logger::instance().error("Failed to fork process for: " + name);
             }
-        #endif
+#endif
     }
 
+#ifdef _WIN32
     bool Game::LoadTextureFromFile(ID3D11Device* device, const wchar_t* filename, BannerTexture& out_banner) const {
+
         if (!device) return false;
 
         char str[1024];
@@ -243,6 +275,39 @@ namespace MultiLauncher {
 
         return true;
     }
+#else
+    bool Game::LoadTextureFromFile(const char* filename, BannerTexture& out_banner) const {
+        int image_width = 0;
+        int image_height = 0;
+        int channels = 0;
+        unsigned char* image_data = stbi_load(filename, &image_width, &image_height, &channels, 4);
+        if (image_data == NULL) {
+            Logger::instance().error(std::string("Failed to load image: ") + filename + " - " + stbi_failure_reason());
+            return false;
+        }
+
+        GLuint image_texture;
+        glGenTextures(1, &image_texture);
+        glBindTexture(GL_TEXTURE_2D, image_texture);
+
+        // Setup filtering parameters for display
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        
+        // Upload pixels into texture
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+        glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+        stbi_image_free(image_data);
+
+        out_banner.srv = (void*)(intptr_t)image_texture;
+        out_banner.width = image_width;
+        out_banner.height = image_height;
+
+        return true;
+    }
+#endif
 
     static std::string makeBannerKey(const std::string& name) {
         std::string s = name;
@@ -254,77 +319,207 @@ namespace MultiLauncher {
         return s;
     }
 
-    bool Game::loadBanner(ID3D11Device* device) const {
-        if (bannerLoaded) return true;
+#ifdef _WIN32
+    bool Game::loadBanner(ID3D11Device* device) {
+        if (bannerStatus == BannerLoaded) return true;
+        if (bannerStatus == BannerDownloading) return false;
+        if (bannerStatus == BannerFailed) return false;
 
-        // Try Steam first if AppID is valid
+        // Ready to load texture from disk (Main Thread)
+        if (bannerStatus == BannerReadyToLoad) {
+            std::string key = makeBannerKey(name);
+            std::vector<std::string> exts = { ".jpg", ".png" };
+            
+            // Check steam cache first
+            if (steamAppId > 0) {
+                 std::wstring local = L"assets/cache/" + std::to_wstring(steamAppId) + L"_hero.jpg";
+                 if(std::filesystem::exists(local)) {
+                     if(LoadTextureFromFile(device, local.c_str(), banner)){
+                        bannerLoaded = true;
+                        bannerStatus = BannerLoaded;
+                        return true;
+                     }
+                 }
+            }
+            
+            // Local fallbacks
+            for(const auto& ext : exts) {
+                std::string pathStr = "assets/banners/" + key + ext;
+                std::wstring wpath(pathStr.begin(), pathStr.end());
+                if(std::filesystem::exists(pathStr)) {
+                     if(LoadTextureFromFile(device, wpath.c_str(), banner)){
+                        bannerLoaded = true;
+                        bannerStatus = BannerLoaded;
+                        return true;
+                     }
+                }
+            }
+            // If we reached here, even though we were ready to load, something failed
+            bannerStatus = BannerFailed;
+            return false;
+        }
+
+        // Only here if BannerNotLoaded
+
+        // Check if we already have files locally to skip download
         if (steamAppId > 0) {
              if (!std::filesystem::exists("assets/cache")) {
                 std::filesystem::create_directories("assets/cache");
             }
-            
             std::wstring local = L"assets/cache/" + std::to_wstring(steamAppId) + L"_hero.jpg";
-            
-            // Try library_hero.jpg first
-            if (!std::filesystem::exists(local)) {
+            if(std::filesystem::exists(local)) {
+                bannerStatus = BannerReadyToLoad;
+                return false; // Will load next frame
+            }
+
+            // Needs download
+            bannerStatus = BannerDownloading;
+            std::thread([this, local]() {
                 std::wstring url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/library_hero.jpg";
-                HRESULT hr = URLDownloadToFileW(
-                    nullptr, 
-                    url.c_str(), 
-                    local.c_str(), 
-                    0, 
-                    nullptr
-                );
+                HRESULT hr = URLDownloadToFileW(nullptr, url.c_str(), local.c_str(), 0, nullptr);
                 
-                // Fallback if library_hero.jpg unavailable
                 if (FAILED(hr) || !std::filesystem::exists(local)) {
-                    Logger::instance().info("library_hero.jpg not found for appid " + std::to_string(steamAppId) + ", trying hero.jpg");
-                    
-                    // Clean up failed download
-                    if (std::filesystem::exists(local)) {
-                        std::filesystem::remove(local);
-                    }
+                    // Cleanup
+                    if (std::filesystem::exists(local)) std::filesystem::remove(local);
                     
                     url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/header.jpg";
-                    hr = URLDownloadToFileW(
-                        nullptr, 
-                        url.c_str(), 
-                        local.c_str(), 
-                        0, 
-                        nullptr
-                    );
+                    hr = URLDownloadToFileW(nullptr, url.c_str(), local.c_str(), 0, nullptr);
                     
                     if (FAILED(hr)) {
-                        Logger::instance().error("Failed to download hero.jpg for appid " + std::to_string(steamAppId));
+                        bannerStatus = BannerFailed;
+                        return;
                     }
                 }
-            }
+                bannerStatus = BannerReadyToLoad;
+            }).detach();
 
-            if(LoadTextureFromFile(device, local.c_str(), banner)){
-                bannerLoaded = true;
-                return true;
-            }
+            return false;
         }
 
-        // Local fallback
+        // No steam ID, check local files
+        // If they exist they will be caught by ReadyToLoad logic after we set it
         std::string key = makeBannerKey(name);
-        
         std::vector<std::string> exts = { ".jpg", ".png" };
         for(const auto& ext : exts) {
             std::string pathStr = "assets/banners/" + key + ext;
-
-            std::wstring wpath(pathStr.begin(), pathStr.end());
-            
             if(std::filesystem::exists(pathStr)) {
-                 if(LoadTextureFromFile(device, wpath.c_str(), banner)){
-                    bannerLoaded = true;
-                    return true;
-                 }
+                 bannerStatus = BannerReadyToLoad;
+                 return false;
             }
         }
-
-        return bannerLoaded;
+        
+        bannerStatus = BannerFailed;
+        return false;
     }
+#else
+    bool Game::loadBanner() {
+        if (bannerStatus == BannerLoaded) return true;
+        if (bannerStatus == BannerDownloading) return false;
+        if (bannerStatus == BannerFailed) return false;
+
+        // Ready to load texture from disk (Main Thread)
+        if (bannerStatus == BannerReadyToLoad) {
+            if (steamAppId > 0) {
+                std::string local = "assets/cache/" + std::to_string(steamAppId) + "_hero.jpg";
+                if(std::filesystem::exists(local)) {
+                     if(LoadTextureFromFile(local.c_str(), banner)){
+                        bannerLoaded = true;
+                        bannerStatus = BannerLoaded;
+                        return true;
+                    }
+                }
+            }
+             // Local fallback
+            std::string key = makeBannerKey(name);
+            std::vector<std::string> exts = { ".jpg", ".png" };
+            for(const auto& ext : exts) {
+                std::string pathStr = "assets/banners/" + key + ext;
+                if(std::filesystem::exists(pathStr)) {
+                     if(LoadTextureFromFile(pathStr.c_str(), banner)){
+                        bannerLoaded = true;
+                        bannerStatus = BannerLoaded;
+                        return true;
+                     }
+                }
+            }
+             // If we reached here, even though we were ready to load, something failed
+            bannerStatus = BannerFailed;
+            return false;
+        }
+
+        // Only here if BannerNotLoaded
+
+        if (steamAppId > 0) {
+             if (!std::filesystem::exists("assets/cache")) {
+                std::filesystem::create_directories("assets/cache");
+            }
+            std::string local = "assets/cache/" + std::to_string(steamAppId) + "_hero.jpg";
+            
+            // Check if we have it cached
+            if(std::filesystem::exists(local)) {
+                bannerStatus = BannerReadyToLoad;
+                return false;
+            }
+
+            // Needs download
+            bannerStatus = BannerDownloading;
+            
+            std::thread([this, local]() {
+                Logger::instance().info("Downloading banner for appid " + std::to_string(steamAppId));
+                std::string url = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_string(steamAppId) + "/library_hero.jpg";
+                
+                auto tryDownload = [&](const std::string& u) -> bool {
+                    if(!url_exists(u)) return false;
+                    
+                    CURL* curl = curl_easy_init();
+                    if(!curl) return false;
+                    
+                    FILE* file = fopen(local.c_str(), "wb");
+                    if(!file){
+                        curl_easy_cleanup(curl);
+                        return false;
+                    }
+                    curl_easy_setopt(curl, CURLOPT_URL, u.c_str());
+                    curl_easy_setopt(curl, CURLOPT_WRITEDATA, file);
+                    curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+                    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+                    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0");
+                    
+                    CURLcode res = curl_easy_perform(curl);
+                    fclose(file);
+                    curl_easy_cleanup(curl);
+                    return res == CURLE_OK;
+                };
+
+                if(!tryDownload(url)){
+                    url = "https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_string(steamAppId) + "/header.jpg";
+                    if(!tryDownload(url)){
+                         if(std::filesystem::exists(local)) std::filesystem::remove(local);
+                         bannerStatus = BannerFailed;
+                         return;
+                    }
+                }
+                bannerStatus = BannerReadyToLoad;
+            }).detach();
+
+            return false;
+        }
+        
+        // Local fallback check
+        std::string key = makeBannerKey(name);
+        std::vector<std::string> exts = { ".jpg", ".png" };
+        for(const auto& ext : exts) {
+            std::string pathStr = "assets/banners/" + key + ext;
+            if(std::filesystem::exists(pathStr)) {
+                 bannerStatus = BannerReadyToLoad;
+                 return false;
+            }
+        }
+        
+        bannerStatus = BannerFailed;
+        return false;
+    }
+#endif
 
     void Game::updateStatus() {
         bool running = isProcessRunning(executableName);
@@ -338,8 +533,6 @@ namespace MultiLauncher {
         }
     }
 
-    #include <tlhelp32.h>
-    #include <algorithm>
     bool Game::isProcessRunning(const std::string& processName) const {
         #ifdef _WIN32
         bool found = false;

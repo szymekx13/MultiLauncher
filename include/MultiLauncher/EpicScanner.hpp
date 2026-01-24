@@ -1,6 +1,7 @@
 #pragma once
 #include "IScanner.hpp"
 #include "EpicProvider.hpp"
+#include "Logger.hpp"
 #include <vector>
 #include <filesystem>
 #include <fstream>
@@ -14,8 +15,13 @@ namespace MultiLauncher{
         public:
             std::vector<Game> scan() override {
                 std::vector<Game> games;
+#ifdef _WIN32
                 std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
-                
+#else
+                std::filesystem::path manifestDir = "";
+                Logger::instance().info("Linux user");
+                return games;
+#endif
                 if(!std::filesystem::exists(manifestDir)){
                     Logger::instance().error(std::string("Epic Games manifest directory not found at: ") + manifestDir.string());
                     return games;
@@ -77,6 +83,9 @@ namespace MultiLauncher{
                             }
                         }
                         if (!found) {
+                            if(lg.title.find("Epic") != std::string::npos){
+                                continue;
+                            }
                             games.emplace_back(
                                 lg.title,
                                 Game::LauncherType::EPIC,

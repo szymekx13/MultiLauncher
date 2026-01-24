@@ -2,8 +2,17 @@
 #include <string>
 #include <functional>
 #include <vector>
+#ifdef _WIN32
 #include <windows.h>
+#endif
 #include <thread>
+#ifndef _WIN32
+#include <unistd.h>
+#include <sys/wait.h>
+#include <cstring>
+#include <array>
+#include <memory>
+#endif
 #include "Logger.hpp"
 
 namespace MultiLauncher {
@@ -11,6 +20,7 @@ namespace MultiLauncher {
     public:
         using OutputCallback = std::function<void(const std::string&)>;
 
+#ifdef _WIN32
         static int run(const std::string& command, OutputCallback callback = nullptr, const std::string& workingDir = "") {
             SECURITY_ATTRIBUTES saAttr;
             saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
@@ -81,7 +91,38 @@ namespace MultiLauncher {
             CloseHandle(hChildStd_OUT_Rd);
 
             return (int)exitCode;
+            return (int)exitCode;
         }
+#else
+        static int run(const std::string& command, OutputCallback callback = nullptr, const std::string& workingDir = "") {
+            std::string finalCmd = command;
+            if (!workingDir.empty()) {
+                finalCmd = "cd \"" + workingDir + "\" && " + command;
+            }
+            // Redirect stderr to stdout
+            finalCmd += " 2>&1";
+
+            std::array<char, 128> buffer;
+            std::unique_ptr<FILE, decltype(&pclose)> pipe(popen(finalCmd.c_str(), "r"), pclose);
+            if (!pipe) {
+                return -1;
+            }
+
+            while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
+                std::string line(buffer.data());
+                while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) {
+                    line.pop_back();
+                }
+                if (callback) callback(line);
+            }
+            
+            int returnCode = pclose(pipe.get());
+            if (WIFEXITED(returnCode)) {
+                return WEXITSTATUS(returnCode);
+            }
+            return -1;
+        }
+#endif
 
         static void runAsync(const std::string& command, std::function<void(int)> onComplete, OutputCallback callback = nullptr, const std::string& workingDir = "") {
             std::thread([=]() {

@@ -13,7 +13,11 @@
 
 namespace MultiLauncher{
     struct BannerTexture {
+#ifdef _WIN32
         ID3D11ShaderResourceView* srv = nullptr;
+#else
+        void* srv = nullptr;
+#endif
         int width = 0;
         int height = 0;
     };
@@ -38,6 +42,13 @@ namespace MultiLauncher{
                 Installing,
                 Error
             };
+            enum BannerStatus{
+                BannerNotLoaded,
+                BannerDownloading,
+                BannerReadyToLoad,
+                BannerLoaded,
+                BannerFailed
+            };
         private:
             std::string name;
             LauncherType launcher;
@@ -51,12 +62,17 @@ namespace MultiLauncher{
             std::string eta = "";
 
             // Internal helper
+#ifdef _WIN32
             bool LoadTextureFromFile(ID3D11Device* device, const wchar_t* filename, BannerTexture& out_banner) const;
+#else
+            bool LoadTextureFromFile(const char* filename, BannerTexture& out_banner) const;
+#endif
 
         public:
             void updateStatus();
             bool isProcessRunning(const std::string& processName) const;
             std::atomic<GameStatus> status = GameStatus::Idle; 
+            std::atomic<BannerStatus> bannerStatus = BannerStatus::BannerNotLoaded;
             
             Game(const std::string& n, const LauncherType launch, const std::filesystem::path& p, const std::string& exeName = "", int appid = -1);
             ~Game();
@@ -92,7 +108,11 @@ namespace MultiLauncher{
             void setETA(const std::string& e) { eta = e; }
             void launchAsync();
 
-            bool loadBanner(ID3D11Device* device) const;
+#ifdef _WIN32
+            bool loadBanner(ID3D11Device* device);
+#else
+            bool loadBanner();
+#endif
             const BannerTexture& getBanner() const { return banner; }
             int getSteamAppId() const { return steamAppId; }
 
@@ -105,10 +125,12 @@ namespace MultiLauncher{
                   status(other.status.load()),
                   steamAppId(other.steamAppId),
                   bannerLoaded(other.bannerLoaded),
-                  banner(other.banner)
+                  banner(other.banner),
+                  bannerStatus(other.bannerStatus.load())
             {
                 other.banner.srv = nullptr;
                 other.bannerLoaded = false;
+                other.bannerStatus = BannerStatus::BannerNotLoaded;
             }
 
             Game& operator=(Game&& other) noexcept{
@@ -123,9 +145,11 @@ namespace MultiLauncher{
                     steamAppId = other.steamAppId;
                     bannerLoaded = other.bannerLoaded;
                     banner = other.banner;
+                    bannerStatus.store(other.bannerStatus.load());
                     
                     other.banner.srv = nullptr;
                     other.bannerLoaded = false;
+                    other.bannerStatus = BannerStatus::BannerNotLoaded;
                 }
                 return *this;
             }

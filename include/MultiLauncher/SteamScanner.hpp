@@ -15,12 +15,28 @@ class SteamScanner : public IScanner {
 public:
     std::vector<Game> scan() override {
         std::vector<Game> games;
-
+#ifdef _WIN32
         std::ifstream file(R"(C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf)");
         if (!file) {
             Logger::instance().error("Could not open libraryfolders.vdf");
             return games;
         }
+#else
+        const char* home_env = std::getenv("HOME");
+        std::filesystem::path home = home_env ? std::filesystem::path(home_env) : ".";
+        std::filesystem::path steam_path = home / ".local/share/Steam/steamapps/libraryfolders.vdf";
+        std::filesystem::path flathub_path = home / ".var/app/com.valvesoftware.Steam/data/Steam/steamapps/libraryfolders.vdf";
+
+        std::ifstream file(steam_path);
+        if (!file.is_open()) {
+            Logger::instance().info("Could not open libraryfolders.vdf at " + steam_path.string() + ", trying flathub");
+            file.open(flathub_path);
+            if (!file.is_open()) {
+                Logger::instance().error("Could not open libraryfolders.vdf at " + flathub_path.string());
+                return games;
+            }
+        }
+#endif
 
         tyti::vdf::object root;
         try {
@@ -113,6 +129,10 @@ public:
                 std::replace(name.begin(), name.end(), '_', ' ');
 
                 if(name == "Steamworks Common Redistributables"){
+                    continue;
+                }else if (name.find("Proton") != std::string::npos){
+                    continue;
+                }else if (name.find("Steam") != std::string::npos){
                     continue;
                 }
 

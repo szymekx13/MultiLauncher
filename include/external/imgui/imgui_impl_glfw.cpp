@@ -796,6 +796,9 @@ void ImGui_ImplGlfw_Shutdown()
     ::SetWindowLongPtrW((HWND)main_viewport->PlatformHandleRaw, GWLP_WNDPROC, (LONG_PTR)bd->PrevWndProc);
     bd->PrevWndProc = nullptr;
 #endif
+    
+    // Fix: Explicitly clear PlatformHandle to avoid assertion in ImGui::Shutdown()
+    ImGui::GetMainViewport()->PlatformHandle = nullptr;
 
     io.BackendPlatformName = nullptr;
     io.BackendPlatformUserData = nullptr;

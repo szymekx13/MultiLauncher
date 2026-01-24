@@ -18,14 +18,14 @@ g++ \
     -Iinclude \
     -Iinclude/external \
     -Iinclude/external/imgui \
-    -lglfw -lGL -ldl -lpthread \
+    -lglfw -lGL -ldl -lpthread -lcurl \
     -static-libgcc -static-libstdc++ \
     -std=c++23 -O2 -o MultiLauncher
 
 if [ $? -ne 0 ]; then
     echo ""
     echo "Build failed!"
-    read -n 1 -s -r -p "Press any key to continue..."
+#    read -n 1 -s -r -p "Press any key to continue..."
     exit 1
 fi
 
@@ -49,4 +49,4 @@ echo "Start:    $(date -d "@${start_time%.*}" +%H:%M:%S),${start_time##*.:0}"
 echo "End:      $(date -d "@${end_time%.*}" +%H:%M:%S),${end_time##*.:0}"
 echo "Elapsed:  $hh:$mm:$ss,$cc"
 
-read -n 1 -s -r -p "Press any key to continue..."
+# read -n 1 -s -r -p "Press any key to continue..."

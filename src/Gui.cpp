@@ -16,18 +16,15 @@
     #include <d3d11.h>
     #include <tchar.h>
     #pragma comment(lib, "d3d11.lib")
+#else
+    #include <GLFW/glfw3.h>
+    #include "../external/imgui/imgui_impl_glfw.h"
+    #include "../external/imgui/imgui_impl_opengl3.h"
 #endif
 
+#ifdef _WIN32
     // WndProc helper
     extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-
-    namespace MultiLauncher{
-
-static Gui* g_gui_instance = nullptr;
-
-// global font pointers for render()
-static ImFont* g_mainFont = nullptr;
-static ImFont* g_mainBold = nullptr;
 
 static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -50,7 +47,51 @@ static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
     }
     return DefWindowProc(hWnd, msg, wParam, lParam);
 }
+#endif
 
+    namespace MultiLauncher{
+
+static Gui* g_gui_instance = nullptr;
+static ImFont* g_mainFont = nullptr;
+static ImFont* g_mainBold = nullptr;
+
+static void DrawSpinner(const char* label, float radius, int thickness, const ImVec4& color) {
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (window->SkipItems) return;
+    
+    ImGuiContext& g = *GImGui;
+    const ImGuiStyle& style = g.Style;
+    const ImGuiID id = window->GetID(label);
+    
+    ImVec2 pos = window->DC.CursorPos;
+    ImVec2 size((radius )*2, (radius + style.FramePadding.y)*2);
+    
+    const ImRect bb(pos, ImVec2(pos.x + size.x, pos.y + size.y));
+    ImGui::ItemSize(bb, style.FramePadding.y);
+    if (!ImGui::ItemAdd(bb, id)) return;
+    
+    // Render
+    window->DrawList->PathClear();
+    
+    int num_segments = 30;
+    int start = abs(ImSin(g.Time*1.8f)*(num_segments-5));
+    
+    const float a_min = IM_PI*2.0f * ((float)start) / (float)num_segments;
+    const float a_max = IM_PI*2.0f * ((float)num_segments-3) / (float)num_segments;
+
+    const ImVec2 centre = ImVec2(pos.x+radius, pos.y+radius+style.FramePadding.y);
+    
+    for (int i = 0; i < num_segments; i++) {
+        const float a = a_min + ((float)i / (float)num_segments) * (a_max - a_min);
+        window->DrawList->PathLineTo(ImVec2(centre.x + ImCos(a+g.Time*8) * radius,
+                                            centre.y + ImSin(a+g.Time*8) * radius));
+    }
+
+    window->DrawList->PathStroke(ImGui::GetColorU32(color), false, (float)thickness);
+}
+
+
+#ifdef _WIN32
 bool Gui::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** out_srv, int* out_width, int* out_height)
 {
     int image_width = 0;
@@ -99,9 +140,44 @@ bool Gui::LoadTextureFromFile(const char* filename, ID3D11ShaderResourceView** o
 
     return true;
 }
+#else
+bool Gui::LoadTextureFromFile(const char* filename, void** out_srv, int* out_width, int* out_height)
+{
+    int image_width = 0;
+    int image_height = 0;
+    int channels = 0;
+    unsigned char* image_data = stbi_load(filename, &image_width, &image_height, &channels, 4);
+    if (image_data == NULL)
+        return false;
 
-void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceContext, ID3D11RenderTargetView* rtv) {
+    // Create a OpenGL texture identifier
+    GLuint image_texture;
+    glGenTextures(1, &image_texture);
+    glBindTexture(GL_TEXTURE_2D, image_texture);
+
+    // Setup filtering parameters for display
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE); 
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE); 
+
+    // Upload pixels into texture
+#if defined(GL_UNPACK_ROW_LENGTH) && !defined(__EMSCRIPTEN__)
+    glPixelStorei(GL_UNPACK_ROW_LENGTH, 0);
+#endif
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image_width, image_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image_data);
+    stbi_image_free(image_data);
+
+    *out_srv = (void*)(intptr_t)image_texture;
+    *out_width = image_width;
+    *out_height = image_height;
+
+    return true;
+}
+#endif
+
 #ifdef _WIN32
+void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceContext, ID3D11RenderTargetView* rtv) {
     hwnd_ = hwnd;
     pd3dDevice_ = device;
     pd3dDeviceContext_ = deviceContext;
@@ -206,8 +282,107 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     LoadTextureFromFile("assets/images/epic_logo.png", &m_iconEpic, &w, &h);
     LoadTextureFromFile("assets/images/gog_logo.png", &m_iconGog, &w, &h);
 
-#endif
+#else
+void Gui::init(void* window) {
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
+    io.ConfigFlags &= ~ImGuiConfigFlags_ViewportsEnable;
+
+    ImFont* f1 = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter_18pt-Regular.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
+    if (f1) g_mainFont = f1;
+    ImFont* f2 = io.Fonts->AddFontFromFileTTF("assets/fonts/Inter_18pt-Bold.ttf", 18.0f, nullptr, io.Fonts->GetGlyphRangesDefault());
+    if (f2) g_mainBold = f2;
+    if (g_mainFont) io.FontDefault = g_mainFont;
+
+     // "Moonlight Grey" Theme
+    ImGuiStyle& style = ImGui::GetStyle();
+    ImVec4* colors = style.Colors;
+
+    colors[ImGuiCol_Text]                   = ImVec4(0.95f, 0.96f, 0.98f, 1.00f);
+    colors[ImGuiCol_TextDisabled]           = ImVec4(0.50f, 0.50f, 0.50f, 1.00f);
+    colors[ImGuiCol_WindowBg]               = ImVec4(0.12f, 0.12f, 0.14f, 1.00f); // #1e1e24 Deep Grey
+    colors[ImGuiCol_ChildBg]                = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
+    colors[ImGuiCol_PopupBg]                = ImVec4(0.12f, 0.12f, 0.14f, 0.94f);
+    colors[ImGuiCol_Border]                 = ImVec4(0.28f, 0.28f, 0.30f, 0.50f);
+    colors[ImGuiCol_BorderShadow]           = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
+    colors[ImGuiCol_FrameBg]                = ImVec4(0.18f, 0.18f, 0.21f, 1.00f);
+    colors[ImGuiCol_FrameBgHovered]         = ImVec4(0.24f, 0.24f, 0.28f, 1.00f);
+    colors[ImGuiCol_FrameBgActive]          = ImVec4(0.28f, 0.28f, 0.32f, 1.00f);
+    colors[ImGuiCol_TitleBg]                = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    colors[ImGuiCol_TitleBgActive]          = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    colors[ImGuiCol_TitleBgCollapsed]       = ImVec4(0.12f, 0.12f, 0.14f, 1.00f);
+    colors[ImGuiCol_MenuBarBg]              = ImVec4(0.15f, 0.15f, 0.18f, 1.00f);
+    colors[ImGuiCol_ScrollbarBg]            = ImVec4(0.12f, 0.12f, 0.14f, 0.53f);
+    colors[ImGuiCol_ScrollbarGrab]          = ImVec4(0.31f, 0.31f, 0.31f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabHovered]   = ImVec4(0.41f, 0.41f, 0.41f, 1.00f);
+    colors[ImGuiCol_ScrollbarGrabActive]    = ImVec4(0.51f, 0.51f, 0.51f, 1.00f);
+    colors[ImGuiCol_CheckMark]              = ImVec4(0.30f, 0.65f, 1.00f, 1.00f); // Ocean Blue
+    colors[ImGuiCol_SliderGrab]             = ImVec4(0.30f, 0.65f, 1.00f, 1.00f);
+    colors[ImGuiCol_SliderGrabActive]       = ImVec4(0.50f, 0.80f, 1.00f, 1.00f);
+    colors[ImGuiCol_Button]                 = ImVec4(0.20f, 0.55f, 0.90f, 0.70f); // Soft Ocean Blue
+    colors[ImGuiCol_ButtonHovered]          = ImVec4(0.30f, 0.65f, 1.00f, 1.00f); // Bright Ocean Blue
+    colors[ImGuiCol_ButtonActive]           = ImVec4(0.15f, 0.50f, 0.85f, 1.00f);
+    colors[ImGuiCol_Header]                 = ImVec4(0.20f, 0.55f, 0.90f, 0.40f);
+    colors[ImGuiCol_HeaderHovered]          = ImVec4(0.30f, 0.65f, 1.00f, 0.60f);
+    colors[ImGuiCol_HeaderActive]           = ImVec4(0.20f, 0.55f, 0.90f, 0.80f);
+    colors[ImGuiCol_Separator]              = ImVec4(0.28f, 0.28f, 0.30f, 0.50f);
+    colors[ImGuiCol_SeparatorHovered]       = ImVec4(0.20f, 0.55f, 0.90f, 0.78f);
+    colors[ImGuiCol_SeparatorActive]        = ImVec4(0.20f, 0.55f, 0.90f, 1.00f);
+    colors[ImGuiCol_ResizeGrip]             = ImVec4(0.20f, 0.55f, 0.90f, 0.25f);
+    colors[ImGuiCol_ResizeGripHovered]      = ImVec4(0.30f, 0.65f, 1.00f, 0.67f);
+    colors[ImGuiCol_ResizeGripActive]       = ImVec4(0.30f, 0.65f, 1.00f, 0.95f);
+    colors[ImGuiCol_Tab]                    = ImVec4(0.12f, 0.12f, 0.14f, 0.86f);
+    colors[ImGuiCol_TabHovered]             = ImVec4(0.30f, 0.65f, 1.00f, 0.80f);
+    colors[ImGuiCol_TabActive]              = ImVec4(0.28f, 0.28f, 0.30f, 1.00f);
+    colors[ImGuiCol_TabUnfocused]           = ImVec4(0.10f, 0.10f, 0.12f, 0.97f);
+    colors[ImGuiCol_TabUnfocusedActive]     = ImVec4(0.18f, 0.18f, 0.21f, 1.00f);
+    colors[ImGuiCol_PlotLines]              = ImVec4(0.61f, 0.61f, 0.61f, 1.00f);
+    colors[ImGuiCol_PlotLinesHovered]       = ImVec4(1.00f, 0.43f, 0.35f, 1.00f);
+    colors[ImGuiCol_PlotHistogram]          = ImVec4(0.90f, 0.70f, 0.00f, 1.00f);
+    colors[ImGuiCol_PlotHistogramHovered]   = ImVec4(1.00f, 0.60f, 0.00f, 1.00f);
+    colors[ImGuiCol_TextSelectedBg]         = ImVec4(0.20f, 0.55f, 0.90f, 0.35f);
+    colors[ImGuiCol_DragDropTarget]         = ImVec4(1.00f, 1.00f, 0.00f, 0.90f);
+    colors[ImGuiCol_NavHighlight]           = ImVec4(0.20f, 0.55f, 0.90f, 1.00f);
+    colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
+    colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.00f, 0.00f, 0.00f, 0.60f);
+
+    // Rounding and Padding
+    style.WindowRounding    = 12.0f;
+    style.ChildRounding     = 6.0f;
+    style.FrameRounding     = 6.0f;
+    style.PopupRounding     = 6.0f;
+    style.ScrollbarRounding = 9.0f;
+    style.GrabRounding      = 12.0f;
+    style.TabRounding       = 6.0f;
+
+    style.WindowPadding     = ImVec2(12, 12);
+    style.FramePadding      = ImVec2(10, 6);
+    style.ItemSpacing       = ImVec2(8, 8);
+    style.ItemInnerSpacing  = ImVec2(6, 6);
+    style.IndentSpacing     = 20.0f;
+    style.ScrollbarSize     = 14.0f;
+    style.GrabMinSize       = 10.0f;
+
+    style.WindowBorderSize  = 1.0f;
+    style.ChildBorderSize   = 1.0f;
+    style.PopupBorderSize   = 1.0f;
+    style.FrameBorderSize   = 0.0f;
+    style.TabBorderSize     = 0.0f;
+    
+    ImGui_ImplGlfw_InitForOpenGL((GLFWwindow*)window, true);
+    ImGui_ImplOpenGL3_Init("#version 130");
+
+    g_gui_instance = this;
+
+    int w, h;
+    LoadTextureFromFile("assets/images/steam_logo.png", &m_iconSteam, &w, &h);
+    LoadTextureFromFile("assets/images/epic_logo.png", &m_iconEpic, &w, &h);
+    LoadTextureFromFile("assets/images/gog_logo.png", &m_iconGog, &w, &h);
 }
+#endif
 
 void Gui::shutdown() {
 #ifdef _WIN32
@@ -233,6 +408,11 @@ void Gui::shutdown() {
     UnregisterClass(_T("MultiLauncherWndClass"), GetModuleHandle(NULL));
     g_gui_instance = nullptr;
     
+    #else
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
+    g_gui_instance = nullptr;
     #endif
 }
 
@@ -315,7 +495,11 @@ void Gui::render(GameManager& manager) {
     static int launcher_filter = 0;
     const int LF_STEAM = 1, LF_EPIC = 2, LF_GOG = 4;
 
+#ifdef _WIN32
     auto IconButton = [](ID3D11ShaderResourceView* icon, const char* label, bool active, const ImVec4& color, int& flags, int flag_bit) {
+#else
+    auto IconButton = [](void* icon, const char* label, bool active, const ImVec4& color, int& flags, int flag_bit) {
+#endif
         if(active) ImGui::PushStyleColor(ImGuiCol_Button, color);
         if(icon) {
             if(ImGui::ImageButton(label, (ImTextureID)icon, ImVec2(20,20))) { // slightly smaller
@@ -484,11 +668,20 @@ void Gui::render(GameManager& manager) {
     ImGui::PushFont(g_mainBold);
     ImGui::Begin("Details");
     ImGui::PopFont();
+
     if (!selected_game_name.empty()) {
         bool found = false;
         for (auto& g : manager.getGames()) {
             if (g->getName() == selected_game_name) {
-                if (g->loadBanner(pd3dDevice_)) {
+                
+                // Trigger load / update state
+#ifdef _WIN32
+                bool loaded = g->loadBanner(pd3dDevice_);
+#else
+                bool loaded = g->loadBanner();
+#endif
+                
+                if (loaded) {
                     const auto& banner = g->getBanner();
                     if(banner.srv) {
                         float availW = ImGui::GetContentRegionAvail().x;
@@ -526,13 +719,30 @@ void Gui::render(GameManager& manager) {
                 } else {
                      ImGui::PushStyleColor(ImGuiCol_ChildBg, ImVec4(0.1f, 0.1f, 0.12f, 1.0f));
                      if(ImGui::BeginChild("BannerFallback", ImVec2(0, 150), true)) {
-                        // Center text
-                         auto windowWidth = ImGui::GetWindowSize().x;
-                         auto textWidth   = ImGui::CalcTextSize("No Banner Available").x;
+                         
+                         // Check why it's not loaded
+                         auto status = g->bannerStatus.load(); // Public access
+                         
+                         if(status == Game::BannerDownloading) {
+                             // Center Spinner
+                             float spinnerRadius = 20.0f;
+                             ImGui::SetCursorPosX(ImGui::GetWindowSize().x * 0.5f - spinnerRadius);
+                             ImGui::SetCursorPosY(ImGui::GetWindowSize().y * 0.5f - spinnerRadius);
+                             DrawSpinner("##spinner", spinnerRadius, 4, ImVec4(0.2f, 0.55f, 0.90f, 1.0f));
+                             
+                             const char* txt = "Downloading Banner...";
+                             auto txtW = ImGui::CalcTextSize(txt).x;
+                             ImGui::SetCursorPosX(ImGui::GetWindowSize().x * 0.5f - txtW * 0.5f);
+                             ImGui::TextDisabled("%s", txt);
+                         } else {
+                             // Fallback
+                             auto windowWidth = ImGui::GetWindowSize().x;
+                             auto textWidth   = ImGui::CalcTextSize("No Banner Available").x;
 
-                         ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
-                         ImGui::SetCursorPosY(ImGui::GetWindowSize().y * 0.5f - 10.0f);
-                         ImGui::TextDisabled("No banner available");
+                             ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
+                             ImGui::SetCursorPosY(ImGui::GetWindowSize().y * 0.5f - 10.0f);
+                             ImGui::TextDisabled("No banner available");
+                         }
                      }
                      ImGui::EndChild();
                      ImGui::PopStyleColor();
@@ -568,7 +778,7 @@ void Gui::render(GameManager& manager) {
                 } else {
                     if(disabled) ImGui::BeginDisabled();
                     if (ImGui::Button(btnLabel, ImVec2(120, 36))) {
-                        OutputDebugStringA(("MultiLauncher: launching from Details: " + g->getName() + "\n").c_str());
+                        Logger::instance().info("MultiLauncher: launching from Details: " + g->getName());
                         if (g->getLauncher().find("Epic") != std::string::npos) {
                             EpicProvider::launchGame(g->getName());
                         } else {

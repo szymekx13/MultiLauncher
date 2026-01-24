@@ -73,7 +73,14 @@ namespace MultiLauncher {
         }
 
         void scanSteam() {
+#ifdef _WIN32
             std::string steamPath = "C:\\Program Files (x86)\\Steam\\userdata";
+#else
+            std::string steamPath = std::string(getenv("HOME")) + "/.steam/steam/userdata";
+            if (!std::filesystem::exists(steamPath)) {
+                steamPath = std::string(getenv("HOME")) + "/.local/share/Steam/userdata";
+            }
+#endif
             if (!std::filesystem::exists(steamPath)) return;
 
             for (const auto& entry : std::filesystem::directory_iterator(steamPath)) {

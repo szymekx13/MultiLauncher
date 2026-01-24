@@ -175,9 +175,15 @@
 //   Typically you would run: python3 ./gl3w_gen.py --output ../imgui/backends/imgui_impl_opengl3_loader.h --ref ../imgui/backends/imgui_impl_opengl3.cpp ./extra_symbols.txt
 // - You can temporarily use an unstripped version. See https://github.com/dearimgui/gl3w_stripped/releases
 // Changes to this backend using new APIs should be accompanied by a regenerated stripped loader version.
+#if defined(__linux__)
+#define GL_GLEXT_PROTOTYPES
+#include <GL/gl.h>
+#include <GL/glext.h>
+#else
 #define IMGL3W_IMPL
 #define IMGUI_IMPL_OPENGL_LOADER_IMGL3W
 #include "imgui_impl_opengl3_loader.h"
+#endif
 #endif
 
 // Vertex arrays are not supported on ES2/WebGL1 unless Emscripten which uses an extension

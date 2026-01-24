@@ -1,3 +1,7 @@
-.vscode
+.vscode/
+.idea/
 MultiLauncher.exe
 assets/cache
+imgui.ini
+latest_log.txt
+build/
