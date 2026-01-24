@@ -38,10 +38,10 @@ cmake --build .
 
 # Dependencies
 
-- Dear ImGui
+- [Dear ImGui](https://github.com/ocornut/imgui/tree/docking)
 - OpenGL (Linux)
 - DirectX 11 (Windows)
-- Legendary (Epic games CLI)
+- [Legendary (Epic games CLI)](https://github.com/derrod/legendary)
 
 ### Disclaimer
 
