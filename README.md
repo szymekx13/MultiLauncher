@@ -2,6 +2,18 @@
 Cross-platform game launcher written in C++ using Dear ImGui.
 Supports Epic Games downloads via community tools, and Steam games (only installed ones).
 
+## Screenshots - Linux
+
+### Main view
+
+![Main view](screenshots/linux_main_view.png)
+
+### Downloading banner
+![Downloading banner](screenshots/linux_details_downloading.png)
+
+### Game details
+![Game details](screenshots/linux_details_banner.png)
+
 ### Features
 
 - Epic Games Store downloads (via community tool)
@@ -42,6 +54,10 @@ cmake --build .
 - OpenGL (Linux)
 - DirectX 11 (Windows)
 - [Legendary (Epic games CLI)](https://github.com/derrod/legendary)
+
+## Project status
+This project is currenlty **WIP**.
+Some features may be be incomplete or unstable
 
 ### Disclaimer
 

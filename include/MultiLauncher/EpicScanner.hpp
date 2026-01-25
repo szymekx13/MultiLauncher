@@ -19,7 +19,6 @@ namespace MultiLauncher{
                 std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
 #else
                 std::filesystem::path manifestDir = "";
-                Logger::instance().info("Linux user");
                 return games;
 #endif
                 if(!std::filesystem::exists(manifestDir)){
