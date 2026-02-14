@@ -51,6 +51,7 @@ namespace MultiLauncher {
             banner.srv = nullptr;
         }
     }
+#ifndef _WIN32
     bool url_exists(const std::string& url) {
         CURL* curl = curl_easy_init();
         if (!curl) return false;
@@ -58,13 +59,14 @@ namespace MultiLauncher {
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); // HEAD
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
-        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
+        curl_easy_setopt(curl, ERROR_TIMEOUT, 10L);
 
         CURLcode res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
 
         return res == CURLE_OK;
     }
+#endif
 
     void Game::launchAsync() {
         if(status.load() != GameStatus::Idle) return;

@@ -19,8 +19,8 @@ ID3D11RenderTargetView* g_mainRenderTargetView = nullptr;
 
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 #else
-#include <GLFW/glfw3.h>
 #include "../include/external/imgui/imgui.h"
+#include <GLFW/glfw3.h>
 #include "../include/external/imgui/imgui_impl_glfw.h"
 #include "../include/external/imgui/imgui_impl_opengl3.h"
 #include <stdio.h>

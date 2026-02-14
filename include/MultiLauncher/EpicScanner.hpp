@@ -7,8 +7,6 @@
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
-#include "../external/JSON/json.hpp"
-using json = nlohmann::json;
 
 namespace MultiLauncher{
     class EpicScanner : public IScanner{
@@ -19,57 +17,56 @@ namespace MultiLauncher{
                 std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
 #else
                 std::filesystem::path manifestDir = "";
-                return games;
 #endif
-                if(!std::filesystem::exists(manifestDir)){
-                    Logger::instance().error(std::string("Epic Games manifest directory not found at: ") + manifestDir.string());
-                    return games;
-                }else{
+
+                if(!manifestDir.empty() && std::filesystem::exists(manifestDir)){
                     Logger::instance().info(std::string("Epic games library found: ") + manifestDir.string());
+                    for(const auto& entry : std::filesystem::directory_iterator(manifestDir)){
+                        if(entry.path().extension() != ".item"){
+                            continue;
+                        }
+                        std::ifstream file(entry.path());
+                        if(!file){
+                            continue;
+                        }
+                        
+                        json j;
+
+                        try{
+                            file >> j;
+                        }catch(...){
+                            continue;
+                        }
+
+                        if(!j.contains("DisplayName") ||
+                           !j.contains("InstallLocation") ||
+                           !j.contains("LaunchExecutable")){
+                            continue;
+                        }
+                        std::string name = j["DisplayName"].get<std::string>();
+                        
+                        if (name.find("Version:") != std::string::npos || 
+                            name.find("++") != std::string::npos ||
+                            name.find("Update") != std::string::npos ||
+                            name.find("v.") != std::string::npos) {
+                            continue;
+                        }
+
+                        std::string launchExe = j["LaunchExecutable"].get<std::string>();
+                        std::filesystem::path installLoc = j["InstallLocation"].get<std::string>();
+                        std::filesystem::path exePath = installLoc / launchExe;
+
+                        games.emplace_back(
+                            name,
+                            Game::LauncherType::EPIC,
+                            exePath,
+                            launchExe
+                        );
+                    }
+                    Logger::instance().info("Total epic games found via manifests: " + std::to_string(games.size()));
+                } else if (!manifestDir.empty()) {
+                    Logger::instance().error(std::string("Epic Games manifest directory not found at: ") + manifestDir.string());
                 }
-                for(const auto& entry : std::filesystem::directory_iterator(manifestDir)){
-                    if(entry.path().extension() != ".item"){
-                        continue;
-                    }
-                    std::ifstream file(entry.path());
-                    if(!file){
-                        continue;
-                    }
-                    
-                    json j;
-
-                    try{
-                        file >> j;
-                    }catch(...){
-                        continue;
-                    }
-
-                    if(!j.contains("DisplayName") ||
-                       !j.contains("InstallLocation") ||
-                       !j.contains("LaunchExecutable")){
-                        continue;
-                    }
-                    std::string name = j["DisplayName"].get<std::string>();
-                    
-                    if (name.find("Version:") != std::string::npos || 
-                        name.find("++") != std::string::npos ||
-                        name.find("Update") != std::string::npos ||
-                        name.find("v.") != std::string::npos) {
-                        continue;
-                    }
-
-                    std::string launchExe = j["LaunchExecutable"].get<std::string>();
-                    std::filesystem::path installLoc = j["InstallLocation"].get<std::string>();
-                    std::filesystem::path exePath = installLoc / launchExe;
-
-                    games.emplace_back(
-                        name,
-                        Game::LauncherType::EPIC,
-                        exePath,
-                        launchExe
-                    );
-                }
-                Logger::instance().info("Total epic games found via manifests: " + std::to_string(games.size()));
 
                 if (EpicProvider::isAvailable()) {
                     auto legendaryGames = EpicProvider::listGames();

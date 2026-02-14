@@ -116,7 +116,7 @@ namespace MultiLauncher {
                 if (callback) callback(line);
             }
             
-            int returnCode = pclose(pipe.get());
+            int returnCode = pclose(pipe.release());
             if (WIFEXITED(returnCode)) {
                 return WEXITSTATUS(returnCode);
             }

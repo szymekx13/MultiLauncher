@@ -57,4 +57,5 @@ namespace MultiLauncher{
             std::unordered_map<std::string, void*> m_textureCache;
 #endif
     };
+
 }

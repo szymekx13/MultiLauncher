@@ -8,6 +8,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "../include/external/stb_image.h"
 #include "../include/MultiLauncher/PlaytimeManager.hpp"
+#include "../include/MultiLauncher/Gui.hpp"
 #include <cfloat>
 #include <thread>
 #include <algorithm> 
@@ -26,14 +27,18 @@
     // WndProc helper
     extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
-static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+// Forward-declare the Gui symbol and the global instance so this global WndProc
+// (which appears before the namespace definitions) can reference it.
+namespace MultiLauncher { class Gui; extern Gui* g_gui_instance; }
+
+    static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-    if (::ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
-        return true;
+        if (::ImGui_ImplWin32_WndProcHandler(hWnd, msg, wParam, lParam))
+            return true;
     switch (msg)
     {
     case WM_SIZE:
-        if (g_gui_instance && g_gui_instance->getDeviceContext()) {
+            if (MultiLauncher::g_gui_instance && MultiLauncher::g_gui_instance->getDeviceContext()) {
             // handled by swapchain resizing in more complete implementations
         }
         return 0;
@@ -49,9 +54,8 @@ static LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 }
 #endif
 
-    namespace MultiLauncher{
-
-static Gui* g_gui_instance = nullptr;
+namespace MultiLauncher{
+Gui* g_gui_instance = nullptr;
 static ImFont* g_mainFont = nullptr;
 static ImFont* g_mainBold = nullptr;
 
@@ -281,7 +285,7 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     LoadTextureFromFile("assets/images/steam_logo.png", &m_iconSteam, &w, &h);
     LoadTextureFromFile("assets/images/epic_logo.png", &m_iconEpic, &w, &h);
     LoadTextureFromFile("assets/images/gog_logo.png", &m_iconGog, &w, &h);
-
+}
 #else
 void Gui::init(void* window) {
     IMGUI_CHECKVERSION();
@@ -384,7 +388,7 @@ void Gui::init(void* window) {
 }
 #endif
 
-void Gui::shutdown() {
+void Gui::shutdown(){
 #ifdef _WIN32
     ImGui_ImplDX11_Shutdown();
     ImGui_ImplWin32_Shutdown();
@@ -464,12 +468,43 @@ void Gui::render(GameManager& manager) {
     ImGui::Begin("Games");
     ImGui::PopFont();
 
+    static bool show_epic_auth = false;
+    static char auth_code[128] = "";
+
     if (EpicProvider::isAvailable()) {
-        if (ImGui::Button("Connect Epic Account", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
-            EpicProvider::authenticate();
+        if (ImGui::Button(show_epic_auth ? "Close Epic Settings" : "Connect Epic Account", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
+            show_epic_auth = !show_epic_auth;
+        }
+        
+        if (show_epic_auth) {
+            ImGui::BeginChild("EpicAuth", ImVec2(0, 140), true);
+            ImGui::Text("Epic Games Authentication");
+            ImGui::TextDisabled("1. Visit: https://legendary.gl/epiclogin");
+            ImGui::TextDisabled("2. Login and copy the 'authorizationCode'");
+            
+            ImGui::SetNextItemWidth(-85);
+            ImGui::InputTextWithHint("##auth_code", "Paste code here...", auth_code, sizeof(auth_code));
+            ImGui::SameLine();
+            if (ImGui::Button("Login", ImVec2(75, 0))) {
+                EpicProvider::loginWithCode(auth_code, [&manager](){
+                    manager.scanAsync();
+                });
+                show_epic_auth = false;
+                memset(auth_code, 0, sizeof(auth_code));
+            }
+            
+            if (ImGui::Button("Logout / Clear Account", ImVec2(ImGui::GetContentRegionAvail().x, 24))) {
+                EpicProvider::logout();
+            }
+            ImGui::EndChild();
         }
     } else {
         ImGui::TextColored(ImVec4(1, 0, 0, 1), "Epic support requires legendary");
+    }
+    ImGui::Spacing();
+
+    if (ImGui::Button("Refresh Game List", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
+        manager.scanAsync();
     }
     ImGui::Spacing();
 
@@ -833,5 +868,4 @@ void Gui::render(GameManager& manager) {
 
     ImGui::End(); // End MultiLauncherRoot
 }
-
 } // namespace MultiLauncher

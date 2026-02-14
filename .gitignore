@@ -1,6 +1,7 @@
 .vscode/
 .idea/
 MultiLauncher.exe
+MultiLauncher
 assets/cache
 imgui.ini
 latest_log.txt

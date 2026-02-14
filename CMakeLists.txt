@@ -47,11 +47,14 @@ endif()
 # Executable
 add_executable(MultiLauncher ${SOURCES})
 
-# Copy assets to build directory
+# Copy assets and tools to build directory
 add_custom_command(TARGET MultiLauncher POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_SOURCE_DIR}/assets
         ${CMAKE_BINARY_DIR}/assets
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_SOURCE_DIR}/tools
+        ${CMAKE_BINARY_DIR}/tools
 )
 
 # Include directories

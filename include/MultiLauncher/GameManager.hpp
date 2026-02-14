@@ -24,12 +24,30 @@ namespace MultiLauncher{
                         auto found = scanner->scan();
                         std::lock_guard<std::mutex> lock(gamesMutex);
                         for(auto& g : found){
-                            games.emplace_back(std::make_unique<Game>(std::move(g)));
+                            // Check for duplicates
+                            bool exists = false;
+                            for(const auto& existing : games){
+                                if(existing->getName() == g.getName() && 
+                                   existing->getLauncher() == g.getLauncher()){
+                                    exists = true;
+                                    // Optionally update existing game info if needed
+                                    break;
+                                }
+                            }
+                            if(!exists){
+                                games.emplace_back(std::make_unique<Game>(std::move(g)));
+                            }
                         }
                     }catch(const std::exception& e){
                         Logger::instance().error(std::string("Scanner error: ") + e.what());
                     }
                 }
+            }
+
+            void scanAsync() {
+                std::thread([this](){
+                    scanAll();
+                }).detach();
             }
 
             // mutable access
