@@ -6,7 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 include(FetchContent)
 
-# Source files
+# --- Pliki źródłowe ---
 set(SOURCES
     src/main.cpp
     src/App.cpp
@@ -18,9 +18,23 @@ set(SOURCES
     include/external/imgui/imgui_widgets.cpp
 )
 
-find_package(CURL REQUIRED)
+if(NOT WIN32)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
+    find_package(CURL REQUIRED)
+endif()
 
-# Platforms
+# Znajdowanie Pythona
+find_package(Python 3.11 REQUIRED COMPONENTS Interpreter Development)
+
+# Pobieranie pybind11
+FetchContent_Declare(
+    pybind11
+    GIT_REPOSITORY https://github.com/pybind/pybind11.git
+    GIT_TAG        v3.0.2
+)
+FetchContent_MakeAvailable(pybind11)
+
+# Obsługa platform (Windows vs Linux)
 if(WIN32)
     list(APPEND SOURCES
         include/external/imgui/imgui_impl_win32.cpp
@@ -44,28 +58,22 @@ else()
     )
 endif()
 
-# Executable
+# --- Cel główny (Executable) ---
 add_executable(MultiLauncher ${SOURCES})
-
-# Copy assets and tools to build directory
-add_custom_command(TARGET MultiLauncher POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/assets
-        ${CMAKE_BINARY_DIR}/assets
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_SOURCE_DIR}/tools
-        ${CMAKE_BINARY_DIR}/tools
-)
 
 # Include directories
 target_include_directories(MultiLauncher PRIVATE
     include
     include/external
     include/external/imgui
+    ${Python_INCLUDE_DIRS}
 )
 
-# Libraries
-target_link_libraries(MultiLauncher PRIVATE CURL::libcurl)
+# Linkowanie bibliotek
+target_link_libraries(MultiLauncher PRIVATE 
+    $<$<NOT:$<PLATFORM_ID:Windows>>:CURL::libcurl>
+    pybind11::embed  
+)
 
 if(WIN32)
     target_link_libraries(MultiLauncher PRIVATE
@@ -79,9 +87,62 @@ else()
     )
 endif()
 
-# Compiler options
+# Opcje kompilatora
 if(MSVC)
     target_compile_options(MultiLauncher PRIVATE /O2)
 else()
     target_compile_options(MultiLauncher PRIVATE -O2)
+endif()
+
+# --- SEKCJA DYSTRYBUCJI (INSTALL) ---
+
+# Wymuszamy instalację do folderu 'dist' wewnątrz folderu build
+set(CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/dist")
+
+# 1. Instalacja pliku wykonywalnego
+install(TARGETS MultiLauncher RUNTIME DESTINATION ".")
+
+# 2. Instalacja Assets
+install(DIRECTORY "${CMAKE_SOURCE_DIR}/assets/" DESTINATION "assets")
+
+# 3. Instalacja wybranych narzędzi
+install(PROGRAMS "${CMAKE_SOURCE_DIR}/tools/legendary/legendary.exe" DESTINATION "tools/legendary")
+install(PROGRAMS "${CMAKE_SOURCE_DIR}/tools/EpicBanner/EpicBanner.py" DESTINATION "tools/EpicBanner")
+
+if(WIN32)
+    # Wyciągamy ścieżkę do folderu, w którym znajduje się python.exe
+    get_filename_component(PYTHON_BIN_DIR "${Python_EXECUTABLE}" DIRECTORY)
+
+    # 4. Instalacja zależności pythonowych do podfolderu w buildzie
+    set(PIP_DEPS_DIR "${CMAKE_BINARY_DIR}/dist/site-packages")
+    add_custom_command(
+        OUTPUT "${PIP_DEPS_DIR}/_completed"
+        COMMAND "${Python_EXECUTABLE}" -m pip install -r "${CMAKE_SOURCE_DIR}/tools/EpicBanner/requirements.txt" --target "${PIP_DEPS_DIR}"
+        DEPENDS "${CMAKE_SOURCE_DIR}/tools/EpicBanner/requirements.txt"
+        COMMENT "Installing Python dependencies from requirements.txt"
+    )
+    add_custom_target(PipInstall DEPENDS "${PIP_DEPS_DIR}/_completed")
+    add_dependencies(MultiLauncher PipInstall) # Zapewniamy, że zależności są instalowane przed budowaniem
+
+    # Instalujemy zainstalowane pakiety
+    install(DIRECTORY "${PIP_DEPS_DIR}/" DESTINATION "site-packages")
+
+    # 5. Kopiowanie DLL Pythona prosto do folderu z EXE
+    if(Python_RUNTIME_LIBRARIES)
+        install(FILES ${Python_RUNTIME_LIBRARIES} DESTINATION "." OPTIONAL)
+    else()
+        get_filename_component(PYTHON_DLL_PATH "${Python_EXECUTABLE}" DIRECTORY)
+        install(FILES "${PYTHON_DLL_PATH}/python${Python_VERSION_MAJOR}${Python_VERSION_MINOR}.dll" DESTINATION "." OPTIONAL) # Fallback
+    endif()
+
+    # 6. Kopiowanie bibliotek standardowych
+    if(EXISTS "${PYTHON_BIN_DIR}/Lib")
+        install(DIRECTORY "${PYTHON_BIN_DIR}/Lib/" DESTINATION "Lib" 
+                PATTERN "site-packages" EXCLUDE 
+                PATTERN "__pycache__" EXCLUDE)
+    elseif(EXISTS "${PYTHON_BIN_DIR}/../Lib")
+        install(DIRECTORY "${PYTHON_BIN_DIR}/../Lib/" DESTINATION "Lib" 
+                PATTERN "site-packages" EXCLUDE 
+                PATTERN "__pycache__" EXCLUDE)
+    endif()
 endif()
