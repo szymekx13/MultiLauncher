@@ -1,9 +1,27 @@
+# IDEs
 .vscode/
 .idea/
+*.iml
+
+# Build artifacts
+build/
 MultiLauncher.exe
 MultiLauncher
-assets/cache
+legendary/legendary.exe
+*.o
+*.obj
+
+# Logs and cache
 imgui.ini
 latest_log.txt
-build/
-*.iml
+assets/cache/
+
+# Python
+tools/EpicBanner/venv/
+__pycache__/
+*.pyc
+
+# Environment variables
+.env
+*.env.*
+!.env.example
