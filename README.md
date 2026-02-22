@@ -47,6 +47,36 @@ cmake ..
 cmake --build .
 ```
 
+## Tools
+
+### EpicBanner
+
+The `tools/EpicBanner/EpicBanner.py` script is used to download hero/banner images for games from the Epic Games Store using the SteamGridDB API.
+
+#### Setup
+
+1.  **Navigate to the script directory:**
+    ```bash
+    cd tools/EpicBanner
+    ```
+2.  **Install dependencies:**
+    A virtual environment is included in the repository. Install the required packages using:
+    ```bash
+    # On Windows
+    .\venv\bin\Activate.ps1
+    pip install -r requirements.txt
+
+    # On Linux/macOS
+    source venv/bin/activate
+    pip install -r requirements.txt
+    ```
+3.  **API Key:**
+    The script requires an API key for SteamGridDB.
+    - Create a file named `.env` inside the `tools/EpicBanner` directory.
+    - Add your API key to the file in the following format:
+      ```
+      STEAMGRIDDB_API_KEY='YOUR_API_KEY_HERE'
+      ```
 
 # Dependencies
 
