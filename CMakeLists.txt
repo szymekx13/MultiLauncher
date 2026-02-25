@@ -59,7 +59,7 @@ else()
 endif()
 
 
-add_executable(MultiLauncher ${SOURCES})
+add_executable(MultiLauncher WIN32 ${SOURCES})
 
 # Include directories
 target_include_directories(MultiLauncher PRIVATE
