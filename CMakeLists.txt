@@ -78,8 +78,10 @@ target_link_libraries(MultiLauncher PRIVATE
 if(WIN32)
     target_link_libraries(MultiLauncher PRIVATE
         d3d11 dxgi dwmapi d3dcompiler gdi32 user32 ole32 urlmon shell32
-        -static-libgcc -static-libstdc++
     )
+    if(MINGW)
+        target_link_libraries(MultiLauncher PRIVATE -static-libgcc -static-libstdc++)
+    endif()
 else()
     target_link_libraries(MultiLauncher PRIVATE
         glfw
@@ -89,6 +91,7 @@ endif()
 
 if(MSVC)
     target_compile_options(MultiLauncher PRIVATE /O2)
+    target_link_options(MultiLauncher PRIVATE /ENTRY:mainCRTStartup)
 else()
     target_compile_options(MultiLauncher PRIVATE -O2)
 endif()
@@ -111,7 +114,8 @@ install(PROGRAMS "${CMAKE_SOURCE_DIR}/tools/EpicBanner/EpicBanner.py" DESTINATIO
 set(PIP_DEPS_DIR "${CMAKE_BINARY_DIR}/dist/site-packages")
 add_custom_command(
     OUTPUT "${PIP_DEPS_DIR}/_completed"
-    COMMAND "${Python_EXECUTABLE}" -m pip install -r "${CMAKE_SOURCE_DIR}/tools/EpicBanner/requirements.txt" --target "${PIP_DEPS_DIR}"
+    COMMAND "${Python_EXECUTABLE}" -m pip install --upgrade -r "${CMAKE_SOURCE_DIR}/tools/EpicBanner/requirements.txt" --target "${PIP_DEPS_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E touch "${PIP_DEPS_DIR}/_completed"
     DEPENDS "${CMAKE_SOURCE_DIR}/tools/EpicBanner/requirements.txt"
     COMMENT "Installing Python dependencies from requirements.txt"
 )

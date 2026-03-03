@@ -6,18 +6,87 @@
 #include <fstream>
 #include <string>
 #include <algorithm>
-#include <fstream>
-#include <string>
-#include <algorithm>
 #include <cctype>
 #include <chrono>
 #include "../include/MultiLauncher/PlaytimeManager.hpp"
 
 #ifdef _WIN32
 #include <shellapi.h>
-#include <urlmon.h>
 #include <tlhelp32.h>
-#pragma comment(lib, "urlmon.lib")
+#include <winhttp.h>
+#pragma comment(lib, "winhttp.lib")
+
+bool DownloadFile(const std::wstring& url, const std::wstring& filePath) {
+    URL_COMPONENTSW urlComps;
+    wchar_t hostName[256];
+    wchar_t urlPath[2048];
+
+    ZeroMemory(&urlComps, sizeof(urlComps));
+    urlComps.dwStructSize = sizeof(urlComps);
+    urlComps.lpszHostName = hostName;
+    urlComps.dwHostNameLength = _countof(hostName);
+    urlComps.lpszUrlPath = urlPath;
+    urlComps.dwUrlPathLength = _countof(urlPath);
+    urlComps.nScheme = INTERNET_SCHEME_HTTPS;
+
+    if (!WinHttpCrackUrl(url.c_str(), 0, 0, &urlComps)) {
+        return false;
+    }
+
+    HINTERNET hSession = WinHttpOpen(L"MultiLauncher/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
+    if (!hSession) {
+        return false;
+    }
+
+    HINTERNET hConnect = WinHttpConnect(hSession, hostName, urlComps.nPort, 0);
+    if (!hConnect) {
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"GET", urlPath, NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES, WINHTTP_FLAG_SECURE);
+    if (!hRequest) {
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    if (!WinHttpSendRequest(hRequest, WINHTTP_NO_ADDITIONAL_HEADERS, 0, WINHTTP_NO_REQUEST_DATA, 0, 0, 0)) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    if (!WinHttpReceiveResponse(hRequest, NULL)) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    HANDLE hFile = CreateFileW(filePath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (hFile == INVALID_HANDLE_VALUE) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return false;
+    }
+
+    char buffer[4096];
+    DWORD bytesRead = 0;
+    while (WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
+        DWORD bytesWritten = 0;
+        WriteFile(hFile, buffer, bytesRead, &bytesWritten, NULL);
+    }
+
+    CloseHandle(hFile);
+    WinHttpCloseHandle(hRequest);
+    WinHttpCloseHandle(hConnect);
+    WinHttpCloseHandle(hSession);
+
+    return true;
+}
 #else
 #include <unistd.h>
 #include <sys/wait.h>
@@ -378,16 +447,12 @@ namespace MultiLauncher {
             bannerStatus = BannerDownloading;
             std::thread([this, local]() {
                 std::wstring url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/library_hero.jpg";
-                HRESULT hr = URLDownloadToFileW(nullptr, url.c_str(), local.c_str(), 0, nullptr);
-                
-                if (FAILED(hr) || !std::filesystem::exists(local)) {
+                if (!DownloadFile(url, local)) {
                     // Cleanup
                     if (std::filesystem::exists(local)) std::filesystem::remove(local);
                     
                     url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/header.jpg";
-                    hr = URLDownloadToFileW(nullptr, url.c_str(), local.c_str(), 0, nullptr);
-                    
-                    if (FAILED(hr)) {
+                    if (!DownloadFile(url, local)) {
                         bannerStatus = BannerFailed;
                         return;
                     }
@@ -535,27 +600,39 @@ namespace MultiLauncher {
         }
     }
 
+    std::wstring stringToWstring(const std::string& str) {
+#ifdef _WIN32
+        if (str.empty()) return std::wstring();
+        int size_needed = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+        std::wstring wstrTo(size_needed, 0);
+        MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstrTo[0], size_needed);
+        return wstrTo;
+#else
+        return std::wstring(str.begin(), str.end());
+#endif
+    }
+
     bool Game::isProcessRunning(const std::string& processName) const {
         #ifdef _WIN32
         bool found = false;
         HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
         if (hSnapshot != INVALID_HANDLE_VALUE) {
-            PROCESSENTRY32 pe32;
-            pe32.dwSize = sizeof(PROCESSENTRY32);
-            if (Process32First(hSnapshot, &pe32)) {
+            PROCESSENTRY32W pe32;
+            pe32.dwSize = sizeof(PROCESSENTRY32W);
+            if (Process32FirstW(hSnapshot, &pe32)) {
                 // Case-insensitive comparison
-                std::string searchName = processName;
+                std::wstring searchName = stringToWstring(processName);
                 std::transform(searchName.begin(), searchName.end(), searchName.begin(), ::tolower);
 
                 do {
-                    std::string currentProcess = pe32.szExeFile;
+                    std::wstring currentProcess = pe32.szExeFile;
                     std::transform(currentProcess.begin(), currentProcess.end(), currentProcess.begin(), ::tolower);
 
                     if (searchName == currentProcess) {
                         found = true;
                         break;
                     }
-                } while (Process32Next(hSnapshot, &pe32));
+                } while (Process32NextW(hSnapshot, &pe32));
             }
             CloseHandle(hSnapshot);
         }
