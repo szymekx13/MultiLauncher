@@ -15,6 +15,7 @@
 #ifdef _WIN32
     #include <windows.h>
     #include <d3d11.h>
+    #include <dwmapi.h>
     #include <tchar.h>
     #pragma comment(lib, "d3d11.lib")
 #else
@@ -186,6 +187,9 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     pd3dDevice_ = device;
     pd3dDeviceContext_ = deviceContext;
     mainRenderTargetView_ = rtv;
+
+    BOOL darkMode = TRUE;
+    DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
