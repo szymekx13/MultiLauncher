@@ -66,6 +66,7 @@ target_include_directories(MultiLauncher PRIVATE
     include
     include/external
     include/external/imgui
+    include/external/SqLiteCpp
     ${Python_INCLUDE_DIRS}
 )
 
