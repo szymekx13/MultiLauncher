@@ -26,5 +26,6 @@ __pycache__/
 *.env.*
 !.env.example
 
-# Output from Inno Setup Compiler
+# Output from Inno Setup Compiler and scripts for Inno Setup
 Output/
+installer.iss
