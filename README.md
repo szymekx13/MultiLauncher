@@ -8,7 +8,9 @@ Supports Epic Games downloads via community tools, and Steam games (only install
 
 <details>
 <summary>Main view</summary>
+
 ![Main view](screenshots/linux_main_view.png)
+
 </details>
 
 ### Downloading banner
