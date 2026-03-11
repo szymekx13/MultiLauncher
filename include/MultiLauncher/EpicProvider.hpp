@@ -2,6 +2,7 @@
 #include <string>
 #include <vector>
 #include <filesystem>
+#include <cctype>
 #include "Game.hpp"
 #include "ProcessRunner.hpp"
 #include <regex>
@@ -35,28 +36,63 @@ namespace MultiLauncher {
             });
         }
 
-        static std::vector<EpicGameInfo> listGames() {
+        static std::vector<EpicGameInfo> listGames(bool forceRefresh = false) {
             std::vector<EpicGameInfo> games;
             std::string fullJson;
-            
-            Logger::instance().info("Fetching Epic Games list via Legendary...");
-            
-            int exitCode = ProcessRunner::run(getLegendaryBinary() + " list --json", [&](const std::string& line) {
+            bool jsonStarted = false;
+
+            Logger::instance().info(std::string("Fetching Epic Games list via Legendary") + (forceRefresh ? " (forcing refresh)..." : "..."));
+
+            std::string cmd = getLegendaryBinary() + " --quiet list --json";
+            if (forceRefresh) {
+                cmd += " --force-refresh";
+            }
+
+            int exitCode = ProcessRunner::run(cmd, [&](const std::string& line) {
                 if (line.empty()) return;
 
-                // Check if this line is likely a log message instead of JSON
-                // Log messages typically start with [tag] like [cli], [info], [dl]
-                bool isLogLine = (line.find("[cli]") == 0 || line.find("[info]") == 0 || 
-                                  line.find("[dl]") == 0 || line.find("[egl]") == 0);
+                // Better detection of JSON vs Log lines
+                // Log lines typically start with [tag] LEVEL:
+                // But JSON also starts with [ or {
+                bool isLogLine = false;
+                if (line.size() > 1 && line[0] == '[') {
+                    // Check if it matches log pattern like [cli], [Core], [DL], [updater]
+                    // Log lines usually have a space after the closing bracket if they are tags
+                    size_t closingBracket = line.find(']');
+                    if (closingBracket != std::string::npos && closingBracket < 20) {
+                        bool onlyAlnum = true;
+                        for (size_t i = 1; i < closingBracket; ++i) {
+                            if (!isalnum((unsigned char)line[i]) && line[i] != '-') {
+                                onlyAlnum = false;
+                                break;
+                            }
+                        }
+                        if (onlyAlnum && closingBracket + 1 < line.size()) {
+                            if (line[closingBracket + 1] == ' ' || isupper((unsigned char)line[closingBracket + 1])) {
+                                 // Likely a log line if it's followed by a space or uppercase (LEVEL)
+                                 // e.g., "[cli] INFO:" or "[Core]DEBUG:"
+                                 isLogLine = true;
+                            }
+                        }
+                    }
+                }
 
-                if (!isLogLine && (line[0] == '[' || line[0] == '{')) {
-                    fullJson += line;
-                } else if (line.find("[cli] INFO: Logging in...") == std::string::npos) {
-                    // Log info/error lines from legendary, but skip the noisy logging-in message
-                    Logger::instance().info("[Legendary Info] " + line);
+                if (!jsonStarted) {
+                    if (!isLogLine && (line[0] == '[' || line[0] == '{')) {
+                        jsonStarted = true;
+                        fullJson += line;
+                    } else if (!isLogLine && line.find("Logging in...") == std::string::npos) {
+                        Logger::instance().info("[Legendary Info] " + line);
+                    }
+                } else {
+                    // Once JSON started, we append everything that doesn't look like a new log message
+                    if (isLogLine) {
+                        Logger::instance().info("[Legendary Info] " + line);
+                    } else {
+                        fullJson += line;
+                    }
                 }
             });
-
             if (exitCode == 1) {
                 Logger::instance().info("Legendary: Not logged in. Please connect your Epic Games account.");
                 return games;

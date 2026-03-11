@@ -174,7 +174,7 @@ namespace MultiLauncher {
         std::string exePath = path.string();
         
 #ifdef _WIN32
-        if (launcher == STEAM) {
+        if (launcher == STEAM || launcher == GOG) {
             SHELLEXECUTEINFOA shExInfo = {0};
             shExInfo.cbSize = sizeof(shExInfo);
             shExInfo.fMask = SEE_MASK_NOCLOSEPROCESS;
@@ -186,7 +186,7 @@ namespace MultiLauncher {
             shExInfo.nShow = SW_SHOWNORMAL;
             shExInfo.hInstApp = NULL;
 
-            Logger::instance().info("Launching Steam game: " + name);
+            Logger::instance().info("Launching " + getLauncher() + " game: " + name);
 
             if (ShellExecuteExA(&shExInfo))
             {
@@ -200,7 +200,7 @@ namespace MultiLauncher {
             }
             else
             {
-                Logger::instance().error("ShellExecute failed for Steam game: " + name);
+                Logger::instance().error("ShellExecute failed for " + getLauncher() + " game: " + name);
                 status = GameStatus::Idle;
             }
             return;

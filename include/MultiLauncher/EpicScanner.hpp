@@ -11,13 +11,13 @@
 namespace MultiLauncher{
     class EpicScanner : public IScanner{
         public:
-            std::vector<Game> scan() override {
+            std::vector<Game> scan(bool forceRefresh = false) override {
                 std::vector<Game> games;
-#ifdef _WIN32
+    #ifdef _WIN32
                 std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
-#else
+    #else
                 std::filesystem::path manifestDir = "";
-#endif
+    #endif
 
                 if(!manifestDir.empty() && std::filesystem::exists(manifestDir)){
                     Logger::instance().info(std::string("Epic games library found: ") + manifestDir.string());
@@ -29,7 +29,7 @@ namespace MultiLauncher{
                         if(!file){
                             continue;
                         }
-                        
+
                         json j;
 
                         try{
@@ -44,8 +44,8 @@ namespace MultiLauncher{
                             continue;
                         }
                         std::string name = j["DisplayName"].get<std::string>();
-                        
-                        if (name.find("Version:") != std::string::npos || 
+
+                        if (name.find("Version:") != std::string::npos ||
                             name.find("++") != std::string::npos ||
                             name.find("Update") != std::string::npos ||
                             name.find("v.") != std::string::npos) {
@@ -69,9 +69,8 @@ namespace MultiLauncher{
                 }
 
                 if (EpicProvider::isAvailable()) {
-                    auto legendaryGames = EpicProvider::listGames();
-                    for (const auto& lg : legendaryGames) {
-                        bool found = false;
+                    auto legendaryGames = EpicProvider::listGames(forceRefresh);
+                    for (const auto& lg : legendaryGames) {                        bool found = false;
                         for (const auto& existing : games) {
                             if (existing.getName() == lg.title) {
                                 found = true;

@@ -122,12 +122,14 @@ namespace MultiLauncher{
                   path(std::move(other.path)), 
                   executableName(std::move(other.executableName)),
                   gameState(std::move(other.gameState)), 
-                  status(other.status.load()),
                   steamAppId(other.steamAppId),
                   bannerLoaded(other.bannerLoaded),
                   banner(other.banner),
-                  bannerStatus(other.bannerStatus.load())
+                  progress(other.progress),
+                  eta(std::move(other.eta))
             {
+                status.store(other.status.load());
+                bannerStatus.store(other.bannerStatus.load());
                 other.banner.srv = nullptr;
                 other.bannerLoaded = false;
                 other.bannerStatus = BannerStatus::BannerNotLoaded;

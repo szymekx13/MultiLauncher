@@ -18,16 +18,16 @@ namespace MultiLauncher{
                     game->updateStatus();
                 }
             }
-            void scanAll(){
+            void scanAll(bool forceRefresh = false){
                 for(auto& scanner : scanners){
                     try{
-                        auto found = scanner->scan();
+                        auto found = scanner->scan(forceRefresh);
                         std::lock_guard<std::mutex> lock(gamesMutex);
                         for(auto& g : found){
                             // Check for duplicates
                             bool exists = false;
                             for(const auto& existing : games){
-                                if(existing->getName() == g.getName() && 
+                                if(existing->getName() == g.getName() &&
                                    existing->getLauncher() == g.getLauncher()){
                                     exists = true;
                                     // Optionally update existing game info if needed
@@ -44,12 +44,11 @@ namespace MultiLauncher{
                 }
             }
 
-            void scanAsync() {
-                std::thread([this](){
-                    scanAll();
+            void scanAsync(bool forceRefresh = false) {
+                std::thread([this, forceRefresh](){
+                    scanAll(forceRefresh);
                 }).detach();
             }
-
             // mutable access
             std::vector<std::unique_ptr<Game> >& getGames() {
                 return games;
@@ -67,4 +66,4 @@ namespace MultiLauncher{
             std::vector<std::unique_ptr<Game> >games;
             mutable std::mutex gamesMutex;
     };
-}
+} // namespace MultiLauncher

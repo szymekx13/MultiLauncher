@@ -2,6 +2,7 @@
 #include "../include/MultiLauncher/GameManager.hpp"
 #include "../include/MultiLauncher/EpicScanner.hpp"
 #include "../include/MultiLauncher/SteamScanner.hpp"
+#include "../include/MultiLauncher/GogScanner.hpp"
 #include "../include/MultiLauncher/PlaytimeManager.hpp"
 #ifdef _WIN32
 #include <windows.h>
@@ -120,7 +121,8 @@ namespace MultiLauncher{
 
         MultiLauncher::GameManager manager;
         manager.addScanner(std::make_unique<SteamScanner>());
-        manager.addScanner(std::make_unique<MultiLauncher::EpicScanner>());
+        manager.addScanner(std::make_unique<EpicScanner>());
+        manager.addScanner(std::make_unique<GogScanner>());
         
         // Scan in background to avoid UI lag
         std::thread([&manager](){
@@ -193,7 +195,8 @@ namespace MultiLauncher{
 
         MultiLauncher::GameManager manager;
         manager.addScanner(std::make_unique<SteamScanner>());
-        manager.addScanner(std::make_unique<MultiLauncher::EpicScanner>());
+        manager.addScanner(std::make_unique<EpicScanner>());
+        manager.addScanner(std::make_unique<GogScanner>());
         
         // Scan in background
         std::thread([&manager](){

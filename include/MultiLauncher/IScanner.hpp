@@ -5,7 +5,7 @@
 namespace MultiLauncher{
     class IScanner{
         public:
-            virtual std::vector<Game> scan() = 0;
+            virtual std::vector<Game> scan(bool forceRefresh = false) = 0;
             virtual ~IScanner() = default;
     };
 } // namespace MultiLauncher

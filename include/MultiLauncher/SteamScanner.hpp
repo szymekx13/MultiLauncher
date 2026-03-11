@@ -13,7 +13,7 @@ namespace MultiLauncher {
 
 class SteamScanner : public IScanner {
 public:
-    std::vector<Game> scan() override {
+    std::vector<Game> scan(bool forceRefresh = false) override {
         std::vector<Game> games;
 #ifdef _WIN32
         std::ifstream file(R"(C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf)");

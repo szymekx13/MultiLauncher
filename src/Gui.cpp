@@ -188,6 +188,7 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     pd3dDeviceContext_ = deviceContext;
     mainRenderTargetView_ = rtv;
 
+    // Rendering window in dark mode - DwmSetWindowAttribute()
     BOOL darkMode = TRUE;
     DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, &darkMode, sizeof(darkMode));
 
@@ -491,7 +492,7 @@ void Gui::render(GameManager& manager) {
             ImGui::SameLine();
             if (ImGui::Button("Login", ImVec2(75, 0))) {
                 EpicProvider::loginWithCode(auth_code, [&manager](){
-                    manager.scanAsync();
+                    manager.scanAsync(true);
                 });
                 show_epic_auth = false;
                 memset(auth_code, 0, sizeof(auth_code));
@@ -508,7 +509,7 @@ void Gui::render(GameManager& manager) {
     ImGui::Spacing();
 
     if (ImGui::Button("Refresh Game List", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
-        manager.scanAsync();
+        manager.scanAsync(true);
     }
     ImGui::Spacing();
 
