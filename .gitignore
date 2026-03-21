@@ -29,3 +29,6 @@ __pycache__/
 # Output from Inno Setup Compiler and scripts for Inno Setup
 Output/
 installer.iss
+
+# Agents
+GEMINI.md

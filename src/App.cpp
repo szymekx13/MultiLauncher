@@ -4,6 +4,7 @@
 #include "../include/MultiLauncher/SteamScanner.hpp"
 #include "../include/MultiLauncher/GogScanner.hpp"
 #include "../include/MultiLauncher/PlaytimeManager.hpp"
+#include <filesystem>
 #ifdef _WIN32
 #include <windows.h>
 #include <d3d11.h>
@@ -89,6 +90,12 @@ namespace MultiLauncher{
     }
 
     void App::run() {
+        std::filesystem::path currentDir = std::filesystem::current_path();
+        std::filesystem::path filename = currentDir / std::filesystem::path("playtime.json");
+        if(!exists(filename)){
+            std::filesystem::create_directories(filename.parent_path());
+        }
+
         WNDCLASSEXA wc{ sizeof(WNDCLASSEX), CS_CLASSDC, WndProc, 0L,0L,
                         (HINSTANCE)GetModuleHandle(nullptr), nullptr, nullptr, nullptr, nullptr,
                         "MultiLauncher", nullptr };

@@ -175,10 +175,10 @@ namespace MultiLauncher {
             });
         }
 
-        static void launchGame(const std::string& appName) {
+        static void launchGame(const std::string& appName, const std::string& title = "") {
             ProcessRunner::runAsync(getLegendaryBinary() + " launch " + appName, [](int code) {
                 Logger::instance().info("Legendary launch process completed with code: " + std::to_string(code));
-            });
+            }, nullptr, "", title.empty() ? appName : title);
         }
     };
 }

@@ -14,6 +14,8 @@
 #include <memory>
 #endif
 #include "Logger.hpp"
+#include "PlaytimeManager.hpp"
+#include <chrono>
 
 namespace MultiLauncher {
     class ProcessRunner {
@@ -21,7 +23,9 @@ namespace MultiLauncher {
         using OutputCallback = std::function<void(const std::string&)>;
 
 #ifdef _WIN32
-        static int run(const std::string& command, OutputCallback callback = nullptr, const std::string& workingDir = "") {
+        static int run(const std::string& command, OutputCallback callback = nullptr, const std::string& workingDir = "", const std::string& gameName = "") {
+            auto start = std::chrono::steady_clock::now();
+
             SECURITY_ATTRIBUTES saAttr;
             saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
             saAttr.bInheritHandle = TRUE;
@@ -47,9 +51,9 @@ namespace MultiLauncher {
             PROCESS_INFORMATION pi = { 0 };
             char* cmd = _strdup(command.c_str());
 
-            BOOL bSuccess = CreateProcessA(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL, 
+            BOOL bSuccess = CreateProcessA(NULL, cmd, NULL, NULL, TRUE, CREATE_NO_WINDOW, NULL,
                                          workingDir.empty() ? NULL : workingDir.c_str(), &si, &pi);
-            
+
             free(cmd);
 
             if (!bSuccess) {
@@ -67,7 +71,7 @@ namespace MultiLauncher {
             while (ReadFile(hChildStd_OUT_Rd, chBuf, 4095, &dwRead, NULL) && dwRead > 0) {
                 chBuf[dwRead] = '\0';
                 lineBuffer += chBuf;
-                
+
                 size_t pos;
                 while ((pos = lineBuffer.find('\n')) != std::string::npos) {
                     std::string line = lineBuffer.substr(0, pos);
@@ -90,11 +94,20 @@ namespace MultiLauncher {
             CloseHandle(pi.hThread);
             CloseHandle(hChildStd_OUT_Rd);
 
-            return (int)exitCode;
+            if (!gameName.empty()) {
+                auto end = std::chrono::steady_clock::now();
+                auto elapsedMinutes = std::chrono::duration_cast<std::chrono::minutes>(end - start).count();
+                if (elapsedMinutes > 0) {
+                    PlaytimeManager::instance().addPlaytime(gameName, (int)elapsedMinutes);
+                }
+            }
+
             return (int)exitCode;
         }
 #else
-        static int run(const std::string& command, OutputCallback callback = nullptr, const std::string& workingDir = "") {
+        static int run(const std::string& command, OutputCallback callback = nullptr, const std::string& workingDir = "", const std::string& gameName = "") {
+            auto start = std::chrono::steady_clock::now();
+
             std::string finalCmd = command;
             if (!workingDir.empty()) {
                 finalCmd = "cd \"" + workingDir + "\" && " + command;
@@ -115,18 +128,28 @@ namespace MultiLauncher {
                 }
                 if (callback) callback(line);
             }
-            
+
             int returnCode = pclose(pipe.release());
+            int exitCode = -1;
             if (WIFEXITED(returnCode)) {
-                return WEXITSTATUS(returnCode);
+                exitCode = WEXITSTATUS(returnCode);
             }
-            return -1;
+
+            if (!gameName.empty()) {
+                auto end = std::chrono::steady_clock::now();
+                auto elapsedMinutes = std::chrono::duration_cast<std::chrono::minutes>(end - start).count();
+                if (elapsedMinutes > 0) {
+                    PlaytimeManager::instance().addPlaytime(gameName, (int)elapsedMinutes);
+                }
+            }
+
+            return exitCode;
         }
 #endif
 
-        static void runAsync(const std::string& command, std::function<void(int)> onComplete, OutputCallback callback = nullptr, const std::string& workingDir = "") {
+        static void runAsync(const std::string& command, std::function<void(int)> onComplete, OutputCallback callback = nullptr, const std::string& workingDir = "", const std::string& gameName = "") {
             std::thread([=]() {
-                int result = run(command, callback, workingDir);
+                int result = run(command, callback, workingDir, gameName);
                 if (onComplete) onComplete(result);
             }).detach();
         }

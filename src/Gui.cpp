@@ -688,7 +688,7 @@ void Gui::render(GameManager& manager) {
                 {
                     Logger::instance().info("Launching " + game->getName());
                     if (game->getLauncher().find("Epic") != std::string::npos) {
-                        EpicProvider::launchGame(game->getName());
+                        EpicProvider::launchGame(game->getExeName(), game->getName());
                     } else {
                         game->launchAsync();
                     }
@@ -820,7 +820,7 @@ void Gui::render(GameManager& manager) {
                     if (ImGui::Button(btnLabel, ImVec2(120, 36))) {
                         Logger::instance().info("MultiLauncher: launching from Details: " + g->getName());
                         if (g->getLauncher().find("Epic") != std::string::npos) {
-                            EpicProvider::launchGame(g->getName());
+                            EpicProvider::launchGame(g->getExeName(), g->getName());
                         } else {
                             g->launchAsync();
                         }

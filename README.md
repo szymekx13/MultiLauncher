@@ -1,4 +1,5 @@
 # MultiLauncher
+
 Cross-platform game launcher written in C++ using Dear ImGui.
 Supports Epic Games downloads via community tools, and Steam games (only installed ones).
 
@@ -14,9 +15,17 @@ Supports Epic Games downloads via community tools, and Steam games (only install
 </details>
 
 ### Downloading banner
+
+<details>
+
+<summary>Downloading banner</summary>
+
 ![Downloading banner](screenshots/linux_details_downloading.png)
 
+</details>
+
 ### Game details
+
 ![Game details](screenshots/linux_details_banner.png)
 
 ## Screenshots - Windows
@@ -37,7 +46,7 @@ Supports Epic Games downloads via community tools, and Steam games (only install
 
 - Epic Games Store downloads (via community tool)
 - Steam games support (only installed ones)
-- GOG support (WIP)
+- GOG support
 - ImGui based GUI
 - Windows Support
 - Linux Support (WIP)
@@ -47,6 +56,7 @@ Supports Epic Games downloads via community tools, and Steam games (only install
 ### Prerequisites
 
 **Linux (Debian/Ubuntu):**
+
 ```bash
 $ sudo apt-get install build-essential cmake pkg-config libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libcurl4-openssl-dev
 ```

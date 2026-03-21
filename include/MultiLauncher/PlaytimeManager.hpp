@@ -7,6 +7,7 @@
 #include <regex>
 #include <iostream>
 #include "../external/JSON/json.hpp"
+using json = nlohmann::json;
 
 namespace MultiLauncher {
 
@@ -62,14 +63,17 @@ namespace MultiLauncher {
         }
 
         void saveLocal() {
-            try {
-                nlohmann::json j;
-                for (const auto& pair : localPlaytimeMap) {
-                    j[pair.first] = pair.second;
+            try{
+                std::ofstream i("playtime.json");
+                json jsonfile;
+                for(const auto& [name, minutes] : localPlaytimeMap){
+                    jsonfile[name] = minutes;
                 }
-                std::ofstream o("playtime.json");
-                o << j.dump(4);
-            } catch (...) {}
+                i << jsonfile;
+                i.close();
+            }catch(...){
+                Logger::instance().error("There was a problem while saving data to playtime.json");
+            }
         }
 
         void scanSteam() {
