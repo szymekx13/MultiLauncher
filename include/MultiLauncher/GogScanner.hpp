@@ -66,6 +66,10 @@ namespace MultiLauncher{
                 for(int i = 0; i < games.size(); i++){
                     std::cout << games[i].getName() << std::endl;
                 }
+                if(games.empty()){
+                    std::string manifestDirStr = manifestDir.string();
+                    Logger::instance().info("No GOG games found in " + manifestDirStr);
+                }
                 return games;
             }
     };
