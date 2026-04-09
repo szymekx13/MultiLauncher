@@ -26,21 +26,44 @@ Supports Epic Games downloads via community tools, and Steam games (only install
 
 ### Game details
 
+<details> 
+
+<summary>Game details</summary>
+
 ![Game details](screenshots/linux_details_banner.png)
+
+</details>
+
 
 ## Screenshots - Windows
 
 ### Main view
 
+<details> 
+<summary>Main view</summary>
+
 ![Main view](screenshots/windows_main_view.png)
+
+</details>
 
 ### Game details
 
+<details> 
+<summary>Game details</summary>
+
+
 ![Game details](screenshots/windows_details.png)
+
+</details>
 
 ### Downloading
 
+<details> 
+<summary>Downloading</summary>
+
 ![Downloading](screenshots/windows_details_downloading.png)
+
+</details> 
 
 ### Features
 
