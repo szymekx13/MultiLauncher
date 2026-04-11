@@ -5,6 +5,7 @@
 #include "../include/external/imgui/imgui_impl_win32.h"
 #include "../include/external/imgui/imgui.h"
 #include "../include/external/imgui/imgui_internal.h"
+#include "../include/external/imgui/imgui_stdlib.h"
 #define STB_IMAGE_IMPLEMENTATION
 #include "../include/external/stb_image.h"
 #include "../include/MultiLauncher/PlaytimeManager.hpp"
@@ -286,6 +287,9 @@ void Gui::init(HWND hwnd, ID3D11Device* device, ID3D11DeviceContext* deviceConte
     // set global instance for WndProc usage
     g_gui_instance = this;
 
+    m_showSettings = false;
+    // m_steamPath, m_gogPath and m_epicPath trzeba tutaj ustawić
+
     int w, h;
     LoadTextureFromFile("assets/images/steam_logo.png", &m_iconSteam, &w, &h);
     LoadTextureFromFile("assets/images/epic_logo.png", &m_iconEpic, &w, &h);
@@ -385,6 +389,9 @@ void Gui::init(void* window) {
     ImGui_ImplOpenGL3_Init("#version 130");
 
     g_gui_instance = this;
+
+    m_showSettings = false;
+    // m_steamPath, m_gogPath and m_epicPath trzeba tutaj ustawić
 
     int w, h;
     LoadTextureFromFile("assets/images/steam_logo.png", &m_iconSteam, &w, &h);
@@ -508,8 +515,13 @@ void Gui::render(GameManager& manager) {
     }
     ImGui::Spacing();
 
-    if (ImGui::Button("Refresh Game List", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
+    float button_width = ImGui::GetContentRegionAvail().x * 0.48f;
+    if (ImGui::Button("Refresh Game List", ImVec2(button_width, 30))) {
         manager.scanAsync(true);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Settings", ImVec2(ImGui::GetContentRegionAvail().x, 30))) {
+        m_showSettings = !m_showSettings;
     }
     ImGui::Spacing();
 
@@ -872,5 +884,43 @@ void Gui::render(GameManager& manager) {
 
 
     ImGui::End(); // End MultiLauncherRoot
+
+    // Settings "window"
+    if (m_showSettings) {
+        ImGui::SetNextWindowSize(ImVec2(500, 400), ImGuiCond_FirstUseEver);
+        if (ImGui::Begin("Settings", &m_showSettings)) {
+            ImGui::PushFont(g_mainBold);
+            ImGui::Text("Launcher Paths Configuration");
+            ImGui::PopFont();
+            ImGui::Separator();
+            ImGui::Spacing();
+
+            ImGui::Text("Steam Path:");
+            ImGui::InputText("##steam_path", &m_steamPath);
+            ImGui::TextDisabled("Path to steamapps folder or Steam installation");
+
+            ImGui::Spacing();
+            ImGui::Text("Epic Games Path:");
+            ImGui::InputText("##epic_path", &m_epicPath);
+            ImGui::TextDisabled("Path to Legendary or Epic Games library");
+
+            ImGui::Spacing();
+            ImGui::Text("GOG Path:");
+            ImGui::InputText("##gog_path", &m_gogPath);
+            ImGui::TextDisabled("Path to GOG Galaxy games");
+
+            ImGui::Spacing();
+            ImGui::Separator();
+            if (ImGui::Button("Save & Close", ImVec2(120, 30))) {
+                m_showSettings = false;
+                manager.updatePaths(m_steamPath, m_epicPath, m_gogPath); // User will handle the rest
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(120, 30))) {
+                m_showSettings = false;
+            }
+        }
+        ImGui::End();
+    }
 }
 } // namespace MultiLauncher

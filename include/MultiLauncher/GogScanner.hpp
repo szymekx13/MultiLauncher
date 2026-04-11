@@ -17,7 +17,61 @@ namespace MultiLauncher{
                 // we have to scan C:Program Files (x86)\GOG Galaxy\Games\
                 // and find goggame-XXXXXXX.info
 #ifdef _WIN32
-                std::filesystem::path manifestDir = R"(C:\Program Files (x86)\GOG Galaxy\Games)";
+                // std::filesystem::path manifestDir = R"(C:\Program Files (x86)\GOG Galaxy\Games)"; instead we will use settings.json
+                std::filesystem::path settingFile = std::filesystem::current_path() / "assets" / "settings.json";
+                if(!std::filesystem::exists(settingFile)){
+                    std::ofstream settingsJson (settingFile);
+                    json j = json::parse(R"({
+                        "Windows": {
+                            "steam": {
+                            "paths": [
+                                {
+                                "type": "native",
+                                "path": "C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf",
+                                "format": "steam_vdf"
+                                }
+                            ]
+                            },
+                            "epic": {
+                            "paths": [
+                                {
+                                "type": "manifest_dir",
+                                "path": "C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests"
+                                }
+                            ]
+                            },
+                            "gog": {
+                            "paths": [
+                                {
+                                "type": "game_dir",
+                                "path": "C:\\Program Files (x86)\\GOG Galaxy\\Games"
+                                }
+                            ]
+                            }
+                        },
+                        "Linux": {
+                            "steam": {
+                            "paths": [
+                                {
+                                "type": "native",
+                                "path": "/home/.local/share/Steam/steamapps/libraryfolders.vdf"
+                                },
+                                {
+                                "type": "flatpak",
+                                "path": "/home/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/libraryfolders.vdf"
+                                }
+                            ]
+                            }
+                        },
+                        "MacOS": {}
+                        })");
+                    settingsJson << j.dump(4);
+                    settingsJson.close();
+                }
+                std::ifstream file (settingFile);
+                json j = json::parse(file);
+                std::string gogPath = j["Windows"]["gog"]["paths"][0]["path"];
+                std::filesystem::path manifestDir = gogPath;
 #else
                 return games;  // there is no official GOG launcher for linux
 #endif

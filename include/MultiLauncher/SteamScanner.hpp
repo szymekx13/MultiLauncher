@@ -7,7 +7,10 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include "../external/JSON/json.hpp"
 #include <optional> // added
+
+using json = nlohmann::json;
 
 namespace MultiLauncher {
 
@@ -16,16 +19,121 @@ public:
     std::vector<Game> scan(bool forceRefresh = false) override {
         std::vector<Game> games;
 #ifdef _WIN32
-        std::ifstream file(R"(C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf)");
+        std::filesystem::path settingFile = std::filesystem::current_path() / "assets" / "settings.json";
+        if(!std::filesystem::exists(settingFile)){
+            std::ofstream settingsJson (settingFile);
+            json j = json::parse(R"({
+            "Windows": {
+                "steam": {
+                "paths": [
+                    {
+                    "type": "native",
+                    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf",
+                    "format": "steam_vdf"
+                    }
+                ]
+                },
+                "epic": {
+                "paths": [
+                    {
+                    "type": "manifest_dir",
+                    "path": "C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests"
+                    }
+                ]
+                },
+                "gog": {
+                "paths": [
+                    {
+                    "type": "game_dir",
+                    "path": "C:\\Program Files (x86)\\GOG Galaxy\\Games"
+                    }
+                ]
+                }
+            },
+            "Linux": {
+                "steam": {
+                "paths": [
+                    {
+                    "type": "native",
+                    "path": "/home/.local/share/Steam/steamapps/libraryfolders.vdf"
+                    },
+                    {
+                    "type": "flatpak",
+                    "path": "/home/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/libraryfolders.vdf"
+                    }
+                ]
+                }
+            },
+            "MacOS": {}
+            })");
+            settingsJson << j.dump(4);
+            settingsJson.close();
+        }
+        // std::ifstream file(R"(C:\Program Files (x86)\Steam\steamapps\libraryfolders.vdf)"); instead of using this we will try to use settings.json
+        std::ifstream input(settingFile);
+        json j = json::parse(input);
+        std::string steam = j["Windows"]["steam"]["paths"][0]["path"];
+        Logger::instance().info("Checking steam path: " + steam);
+        std::ifstream file(steam);
         if (!file) {
             Logger::instance().error("Could not open libraryfolders.vdf");
             return games;
         }
 #else
         const char* home_env = std::getenv("HOME");
+        std::filesystem::path settingFile = home_env / ".local/share/MultiLauncher/settings.json";
+        if(!std::filesystem::exists(settingFile)){
+            std::ofstream file(settingFile);
+            json j = json::parse(R"({
+            "Windows": {
+                "steam": {
+                "paths": [
+                    {
+                    "type": "native",
+                    "path": "C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf",
+                    "format": "steam_vdf"
+                    }
+                ]
+                },
+                "epic": {
+                "paths": [
+                    {
+                    "type": "manifest_dir",
+                    "path": "C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests"
+                    }
+                ]
+                },
+                "gog": {
+                "paths": [
+                    {
+                    "type": "game_dir",
+                    "path": "C:\\Program Files (x86)\\GOG Galaxy\\Games"
+                    }
+                ]
+                }
+            },
+            "Linux": {
+                "steam": {
+                "paths": [
+                    {
+                    "type": "native",
+                    "path": "/home/.local/share/Steam/steamapps/libraryfolders.vdf"
+                    },
+                    {
+                    "type": "flatpak",
+                    "path": "/home/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/libraryfolders.vdf"
+                    }
+                ]
+                }
+            },
+            "MacOS": {}
+            })");
+            settingsJson << j.dump(4);
+            settingsJson.close();
+        }
         std::filesystem::path home = home_env ? std::filesystem::path(home_env) : ".";
-        std::filesystem::path steam_path = home / ".local/share/Steam/steamapps/libraryfolders.vdf";
-        std::filesystem::path flathub_path = home / ".var/app/com.valvesoftware.Steam/data/Steam/steamapps/libraryfolders.vdf";
+        std::filesystem::path steam_path =  j["Linux"]["steam"]["paths"][0]["path"];
+        std::filesystem::path flathub_path = j["Linux"]["steam"]["paths"][1]["path"];
 
         std::ifstream file(steam_path);
         if (!file.is_open()) {

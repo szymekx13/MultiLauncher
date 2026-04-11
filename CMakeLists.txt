@@ -12,10 +12,12 @@ set(SOURCES
     src/App.cpp
     src/Gui.cpp
     src/Game.cpp
+    src/GameManager.cpp
     include/external/imgui/imgui.cpp
     include/external/imgui/imgui_draw.cpp
     include/external/imgui/imgui_tables.cpp
     include/external/imgui/imgui_widgets.cpp
+    include/external/imgui/imgui_stdlib.cpp
 )
 
 if(NOT WIN32)

@@ -49,6 +49,7 @@ namespace MultiLauncher{
                     scanAll(forceRefresh);
                 }).detach();
             }
+            void updatePaths(std::string steamPath, std::string epicPath, std::string gogPath);
             // mutable access
             std::vector<std::unique_ptr<Game> >& getGames() {
                 return games;

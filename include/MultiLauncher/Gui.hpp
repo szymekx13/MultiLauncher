@@ -1,6 +1,7 @@
 #pragma once
 #include "GameManager.hpp"
 #include "../external/imgui/imgui.h"
+#include "../external/JSON/json.hpp"
 #ifdef _WIN32
     #include <windows.h>
     #include <d3d11.h>
@@ -41,10 +42,14 @@ namespace MultiLauncher{
             ID3D11DeviceContext* pd3dDeviceContext_ = nullptr;
             ID3D11RenderTargetView* mainRenderTargetView_ = nullptr;
 
-            // Texture resources
 #endif
             
             // Texture resources
+            bool m_showSettings = false;
+            std::string m_steamPath = "";
+            std::string m_epicPath = "";
+            std::string m_gogPath = "";
+
 #ifdef _WIN32
             ID3D11ShaderResourceView* m_iconSteam = nullptr;
             ID3D11ShaderResourceView* m_iconEpic = nullptr;

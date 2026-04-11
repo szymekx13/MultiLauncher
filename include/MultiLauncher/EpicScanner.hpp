@@ -2,11 +2,14 @@
 #include "IScanner.hpp"
 #include "EpicProvider.hpp"
 #include "Logger.hpp"
+#include "../external/JSON/json.hpp"
 #include <vector>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
+
+using json = nlohmann::json;
 
 namespace MultiLauncher{
     class EpicScanner : public IScanner{
@@ -14,7 +17,61 @@ namespace MultiLauncher{
             std::vector<Game> scan(bool forceRefresh = false) override {
                 std::vector<Game> games;
     #ifdef _WIN32
-                std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)";
+                std::filesystem::path settingFile = std::filesystem::current_path() / "assets" / "settings.json";
+                // std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)"; insted of this we will use settings.json
+                if(!std::filesystem::exists(settingFile)){
+                    std::ofstream settingJson (settingFile);
+                    json j = json::parse(R"({
+                        "Windows": {
+                            "steam": {
+                            "paths": [
+                                {
+                                "type": "native",
+                                "path": "C:\\Program Files (x86)\\Steam\\steamapps\\libraryfolders.vdf",
+                                "format": "steam_vdf"
+                                }
+                            ]
+                            },
+                            "epic": {
+                            "paths": [
+                                {
+                                "type": "manifest_dir",
+                                "path": "C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests"
+                                }
+                            ]
+                            },
+                            "gog": {
+                            "paths": [
+                                {
+                                "type": "game_dir",
+                                "path": "C:\\Program Files (x86)\\GOG Galaxy\\Games"
+                                }
+                            ]
+                            }
+                        },
+                        "Linux": {
+                            "steam": {
+                            "paths": [
+                                {
+                                "type": "native",
+                                "path": "/home/.local/share/Steam/steamapps/libraryfolders.vdf"
+                                },
+                                {
+                                "type": "flatpak",
+                                "path": "/home/.var/app/com.valvesoftware.Steam/data/Steam/steamapps/libraryfolders.vdf"
+                                }
+                            ]
+                            }
+                        },
+                        "MacOS": {}
+                        })");
+                    settingJson << j.dump(4);
+                    settingJson.close();
+                }
+                std::ifstream input(settingFile);
+                json j = json::parse(input);
+                std::string manDir = j["Windows"]["epic"]["paths"][0]["path"];
+                std::filesystem::path manifestDir = manDir;
     #else
                 std::filesystem::path manifestDir = "";
     #endif
