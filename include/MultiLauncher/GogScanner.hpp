@@ -4,6 +4,9 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#ifdef _WIN32
+    #include "Config.hpp"
+#endif
 #include "../JSON/json.hpp"
 
 using json = nlohmann::json;
@@ -18,7 +21,8 @@ namespace MultiLauncher{
                 // and find goggame-XXXXXXX.info
 #ifdef _WIN32
                 // std::filesystem::path manifestDir = R"(C:\Program Files (x86)\GOG Galaxy\Games)"; instead we will use settings.json
-                std::filesystem::path settingFile = std::filesystem::current_path() / "assets" / "settings.json";
+                std::filesystem::path settingFile = Config::getSettingsPath();
+                std::filesystem::create_directories(settingFile.parent_path());
                 if(!std::filesystem::exists(settingFile)){
                     std::ofstream settingsJson (settingFile);
                     json j = json::parse(R"({

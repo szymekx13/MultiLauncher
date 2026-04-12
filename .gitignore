@@ -6,7 +6,6 @@
 # Build artifacts
 build/
 MultiLauncher.exe
-MultiLauncher
 legendary/legendary.exe
 *.o
 *.obj

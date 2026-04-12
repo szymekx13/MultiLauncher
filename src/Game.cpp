@@ -33,6 +33,10 @@ bool DownloadFile(const std::wstring& url, const std::wstring& filePath) {
         return false;
     }
 
+    // Null-terminate the strings
+    hostName[urlComps.dwHostNameLength] = L'\0';
+    urlPath[urlComps.dwUrlPathLength] = L'\0';
+
     HINTERNET hSession = WinHttpOpen(L"MultiLauncher/1.0", WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, WINHTTP_NO_PROXY_NAME, WINHTTP_NO_PROXY_BYPASS, 0);
     if (!hSession) {
         return false;
@@ -65,6 +69,18 @@ bool DownloadFile(const std::wstring& url, const std::wstring& filePath) {
         return false;
     }
 
+    // Check HTTP status code
+    DWORD dwStatusCode = 0;
+    DWORD dwSize = sizeof(dwStatusCode);
+    if (WinHttpQueryHeaders(hRequest, WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_HEADER_NAME_BY_INDEX, &dwStatusCode, &dwSize, WINHTTP_NO_HEADER_INDEX)) {
+        if (dwStatusCode != 200) {
+            WinHttpCloseHandle(hRequest);
+            WinHttpCloseHandle(hConnect);
+            WinHttpCloseHandle(hSession);
+            return false;
+        }
+    }
+
     HANDLE hFile = CreateFileW(filePath.c_str(), GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         WinHttpCloseHandle(hRequest);
@@ -75,15 +91,22 @@ bool DownloadFile(const std::wstring& url, const std::wstring& filePath) {
 
     char buffer[4096];
     DWORD bytesRead = 0;
+    bool anyData = false;
     while (WinHttpReadData(hRequest, buffer, sizeof(buffer), &bytesRead) && bytesRead > 0) {
         DWORD bytesWritten = 0;
         WriteFile(hFile, buffer, bytesRead, &bytesWritten, NULL);
+        anyData = true;
     }
 
     CloseHandle(hFile);
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
+
+    if (!anyData) {
+        DeleteFileW(filePath.c_str());
+        return false;
+    }
 
     return true;
 }
@@ -446,12 +469,12 @@ namespace MultiLauncher {
             // Needs download
             bannerStatus = BannerDownloading;
             std::thread([this, local]() {
-                std::wstring url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/library_hero.jpg";
+                std::wstring url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/header.jpg";
                 if (!DownloadFile(url, local)) {
                     // Cleanup
                     if (std::filesystem::exists(local)) std::filesystem::remove(local);
                     
-                    url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/header.jpg";
+                    url = L"https://cdn.cloudflare.steamstatic.com/steam/apps/" + std::to_wstring(steamAppId) + L"/library_hero.jpg";
                     if (!DownloadFile(url, local)) {
                         bannerStatus = BannerFailed;
                         return;

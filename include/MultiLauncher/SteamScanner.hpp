@@ -5,6 +5,9 @@
 #include <iostream>
 #include "Logger.hpp"
 #include <vector>
+#ifdef _WIN32
+    #include "Config.hpp"
+#endif
 #include <string>
 #include <filesystem>
 #include "../external/JSON/json.hpp"
@@ -19,7 +22,8 @@ public:
     std::vector<Game> scan(bool forceRefresh = false) override {
         std::vector<Game> games;
 #ifdef _WIN32
-        std::filesystem::path settingFile = std::filesystem::current_path() / "assets" / "settings.json";
+        std::filesystem::path settingFile = Config::getSettingsPath();
+        std::filesystem::create_directories(settingFile.parent_path());
         if(!std::filesystem::exists(settingFile)){
             std::ofstream settingsJson (settingFile);
             json j = json::parse(R"({

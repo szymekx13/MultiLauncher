@@ -5,6 +5,9 @@
 #include "../external/JSON/json.hpp"
 #include <vector>
 #include <filesystem>
+#ifdef _WIN32
+    #include "Config.hpp"
+#endif
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -17,7 +20,8 @@ namespace MultiLauncher{
             std::vector<Game> scan(bool forceRefresh = false) override {
                 std::vector<Game> games;
     #ifdef _WIN32
-                std::filesystem::path settingFile = std::filesystem::current_path() / "assets" / "settings.json";
+                std::filesystem::path settingFile = Config::getSettingsPath();
+                std::filesystem::create_directories(settingFile.parent_path());
                 // std::filesystem::path manifestDir = R"(C:\ProgramData\Epic\EpicGamesLauncher\Data\Manifests)"; insted of this we will use settings.json
                 if(!std::filesystem::exists(settingFile)){
                     std::ofstream settingJson (settingFile);
