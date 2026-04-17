@@ -112,7 +112,15 @@ namespace MultiLauncher {
                     for (auto& item : j) {
                         EpicGameInfo info;
                         if (item.contains("app_name")) info.appName = item["app_name"].get<std::string>();
-                        if (item.contains("title")) info.title = item["title"].get<std::string>();
+                        // Legendary may return display name inside metadata (schema changed in some versions)
+                        if (item.contains("title")) {
+                            info.title = item["title"].get<std::string>();
+                        } else if (item.contains("metadata")) {
+                            auto& md = item["metadata"];
+                            if (md.contains("title")) info.title = md["title"].get<std::string>();
+                            else if (md.contains("productName")) info.title = md["productName"].get<std::string>();
+                            else if (md.contains("displayName")) info.title = md["displayName"].get<std::string>();
+                        }
                         
                         if (!info.appName.empty() && !info.title.empty()) {
                             games.push_back(info);
