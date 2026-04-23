@@ -63,6 +63,14 @@ endif()
 
 add_executable(MultiLauncher WIN32 ${SOURCES})
 
+# Copy assets to build directory
+add_custom_command(TARGET MultiLauncher POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:MultiLauncher>/assets"
+    COMMENT "Copying assets to build directory"
+)
+
 # Include directories
 target_include_directories(MultiLauncher PRIVATE
     include

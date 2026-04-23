@@ -85,9 +85,11 @@ public:
         }
 #else
         const char* home_env = std::getenv("HOME");
-        std::filesystem::path settingFile = home_env / ".local/share/MultiLauncher/settings.json";
+        std::filesystem::path home = home_env ? std::filesystem::path(home_env) : ".";
+        std::filesystem::path settingFile = home / ".local/share/MultiLauncher/settings.json";
         if(!std::filesystem::exists(settingFile)){
-            std::ofstream file(settingFile);
+            std::filesystem::create_directories(settingFile.parent_path());
+            std::ofstream settingsFileStream(settingFile);
             json j = json::parse(R"({
             "Windows": {
                 "steam": {
@@ -132,12 +134,24 @@ public:
             },
             "MacOS": {}
             })");
-            settingsJson << j.dump(4);
-            settingsJson.close();
+            settingsFileStream << j.dump(4);
+            settingsFileStream.close();
         }
-        std::filesystem::path home = home_env ? std::filesystem::path(home_env) : ".";
-        std::filesystem::path steam_path =  j["Linux"]["steam"]["paths"][0]["path"];
-        std::filesystem::path flathub_path = j["Linux"]["steam"]["paths"][1]["path"];
+        
+        std::ifstream settingsInput(settingFile);
+        json jn = json::parse(settingsInput);
+        std::filesystem::path steam_path =  jn["Linux"]["steam"]["paths"][0]["path"];
+        std::filesystem::path flathub_path = jn["Linux"]["steam"]["paths"][1]["path"];
+
+        // Replace /home/ with the actual home directory in paths if they start with it
+        std::string steam_path_str = steam_path.string();
+        if (steam_path_str.substr(0, 6) == "/home/") {
+             steam_path = home / steam_path_str.substr(6);
+        }
+        std::string flathub_path_str = flathub_path.string();
+        if (flathub_path_str.substr(0, 6) == "/home/") {
+             flathub_path = home / flathub_path_str.substr(6);
+        }
 
         std::ifstream file(steam_path);
         if (!file.is_open()) {

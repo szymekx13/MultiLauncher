@@ -151,7 +151,7 @@ namespace MultiLauncher {
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L); // HEAD
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
-        curl_easy_setopt(curl, ERROR_TIMEOUT, 10L);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, 10L);
 
         CURLcode res = curl_easy_perform(curl);
         curl_easy_cleanup(curl);
