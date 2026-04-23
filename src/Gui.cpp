@@ -491,7 +491,11 @@ void Gui::render(GameManager& manager) {
         if (show_epic_auth) {
             ImGui::BeginChild("EpicAuth", ImVec2(0, 140), true);
             ImGui::Text("Epic Games Authentication");
-            ImGui::TextDisabled("1. Visit: https://legendary.gl/epiclogin");
+            // ImGui::TextDisabled("1. Visit: https://legendary.gl/epiclogin");
+            ImGui::TextDisabled("1. Visit: ");
+            ImGui::SameLine();
+            ImGui::TextLinkOpenURL("https://legendary.gl/epiclogin");
+
             ImGui::TextDisabled("2. Login and copy the 'authorizationCode'");
             
             ImGui::SetNextItemWidth(-85);
@@ -510,8 +514,6 @@ void Gui::render(GameManager& manager) {
             }
             ImGui::EndChild();
         }
-    } else {
-        ImGui::TextColored(ImVec4(1, 0, 0, 1), "Epic support requires legendary");
     }
     ImGui::Spacing();
 

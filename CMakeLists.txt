@@ -71,6 +71,21 @@ add_custom_command(TARGET MultiLauncher POST_BUILD
     COMMENT "Copying assets to build directory"
 )
 
+# COpy tools to build dir
+add_custom_command(TARGET MultiLauncher POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/tools"
+        "$<TARGET_FILE_DIR:MultiLauncher>/tools"
+    COMMENT "Copying tools to build directory"
+)
+
+# chmod for legendary bindary so program can use it
+if(NOT WIN32)
+    add_custom_command(TARGET MultiLauncher POST_BUILD
+        COMMAND chmod +x "$<TARGET_FILE_DIR:MultiLauncher>/tools/legendary/legendary"
+    )
+endif()
+
 # Include directories
 target_include_directories(MultiLauncher PRIVATE
     include
